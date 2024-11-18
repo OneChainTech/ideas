@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>配置页面</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="wrapper">
+        <h1>配置 OpenAI API 密钥</h1>
+        <input type="text" id="apiKey" placeholder="请输入您的 OpenAI API 密钥">
+        <button id="saveApiKey">保存</button>
+    </div>
+
+    <script>
+        document.getElementById('saveApiKey').addEventListener('click', () => {
+            const apiKey = document.getElementById('apiKey').value;
+            localStorage.setItem('openaiApiKey', apiKey); // 保存 API 密钥到本地存储
+            alert('API 密钥已保存！');
+        });
+    </script>
+</body>
+</html> 

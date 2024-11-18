@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>智能画板助手</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="wrapper">
+        <div class="toolbar">
+            <div class="tool-group">
+                <button id="new" class="icon-button" title="新建">
+                    <span class="material-icons">add</span>
+                </button>
+                <button id="save" class="icon-button" title="保存">
+                    <span class="material-icons">save</span>
+                </button>
+                <label for="imageUpload" class="icon-button" title="上传图片">
+                    <span class="material-icons">image</span>
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+            </div>
+            <div class="separator"></div>
+            <div class="tool-group">
+                <button id="pen" class="icon-button active" title="画笔">
+                    <span class="material-icons">edit</span>
+                </button>
+                <button id="eraser" class="icon-button" title="橡皮擦">
+                    <span class="material-icons">auto_fix_normal</span>
+                </button>
+                <div class="dropdown">
+                    <button id="shape" class="icon-button" title="形状">
+                        <span class="material-icons">category</span>
+                    </button>
+                    <div class="dropdown-content">
+                        <div class="dropdown-item" data-shape="rect">
+                            <span class="material-icons">rectangle</span>
+                            方形
+                        </div>
+                        <div class="dropdown-item" data-shape="circle">
+                            <span class="material-icons">circle</span>
+                            圆形
+                        </div>
+                        <div class="dropdown-item" data-shape="arrow">
+                            <span class="material-icons">arrow_right_alt</span>
+                            箭头
+                        </div>
+                    </div>
+                </div>
+                <button id="text" class="icon-button" title="文本">
+                    <span class="material-icons">text_fields</span>
+                </button>
+                <button id="undo" class="icon-button" title="撤销">
+                    <span class="material-icons">undo</span>
+                </button>
+            </div>
+            <div class="separator"></div>
+            <div class="tool-group">
+                <div class="color-picker-wrapper">
+                    <input type="color" id="colorPicker" value="#000000">
+                    <span class="color-preview"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="drawingBoard"></canvas>
+            <div id="textInput" class="text-input" style="display: none;">
+                <input type="text" id="textContent" placeholder="请输入文本...">
+                <div class="button-group">
+                    <button id="confirmText">确定</button>
+                    <button id="cancelText">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/canvas.js"></script>
+</body>
+</html> 
