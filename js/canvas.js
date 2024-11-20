@@ -9,6 +9,7 @@ class DrawingBoard {
         this.startY = 0;
         this.tempCanvas = document.createElement('canvas');
         this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true });
+        this.colorPicker = document.getElementById('colorPicker');
         this.initializeCanvas();
         this.setupEventListeners();
         this.loadState();
@@ -17,6 +18,7 @@ class DrawingBoard {
         this.lastState = null;
         this.currentShape = null;
         this.backgroundImage = null;
+        this.isSubmitting = false;
     }
 
     initializeCanvas() {
@@ -27,6 +29,9 @@ class DrawingBoard {
         
         this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true });
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         this.ctx.strokeStyle = '#000000';
         this.ctx.lineWidth = 2;
@@ -117,23 +122,46 @@ class DrawingBoard {
         const aiRenderButton = document.getElementById('aiRenderButton');
         if (aiRenderButton) {
             aiRenderButton.addEventListener('click', async () => {
+                if (this.isSubmitting) {
+                    return;
+                }
+                
                 try {
+                    this.isSubmitting = true;
+                    aiRenderButton.disabled = true;
+                    aiRenderButton.style.opacity = '0.5';
+                    
                     const progressBar = showProgressBar();
+                    const result = await this.uploadForAnalysis();
+                    console.log('Analysis result:', result);
                     
-                    const imageData = this.canvas.toDataURL('image/png');
-
-                    const formData = new FormData();
-                    formData.append('file', dataURLtoBlob(imageData), 'canvas.png');
-
-                    const response = await uploadImage(formData);
-                    
-                    displayResponse(response);
+                    if (result && result.analysisResult) {
+                        displayResponse(result.analysisResult);
+                    } else {
+                        displayResponse('分析结果为空');
+                    }
                 } catch (error) {
                     console.error('AI渲染失败:', error);
-                    alert('AI渲染失败: ' + error.message);
+                    displayResponse('AI渲染失败: ' + error.message);
                 } finally {
+                    this.isSubmitting = false;
+                    aiRenderButton.disabled = false;
+                    aiRenderButton.style.opacity = '1';
                     hideProgressBar();
                 }
+            });
+        }
+
+        // 添加图片上传处理
+        const imageUpload = document.getElementById('imageUpload');
+        if (imageUpload) {
+            imageUpload.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.loadImage(file);
+                }
+                // 清空 input 的值，这样同一张图片可以重复上传
+                imageUpload.value = '';
             });
         }
     }
@@ -168,7 +196,13 @@ class DrawingBoard {
     }
 
     clearCanvas() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        const currentFillStyle = this.ctx.fillStyle;
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.ctx.fillStyle = currentFillStyle;
+        
         this.backgroundImage = null;
         this.undoStack = [];
         this.saveState();
@@ -232,6 +266,7 @@ class DrawingBoard {
             const x = parseInt(textInput.dataset.x);
             const y = parseInt(textInput.dataset.y);
             
+            this.ctx.fillStyle = this.colorPicker.value;
             this.ctx.fillText(text, x, y);
             this.saveState();
         }
@@ -399,6 +434,106 @@ class DrawingBoard {
         };
         reader.readAsDataURL(file);
     }
+
+    // 获取画布中有内容的区域
+    getContentBounds() {
+        const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        const data = imageData.data;
+        let minX = this.canvas.width;
+        let minY = this.canvas.height;
+        let maxX = 0;
+        let maxY = 0;
+        
+        // 遍历像素数据找到内容边界
+        for (let y = 0; y < this.canvas.height; y++) {
+            for (let x = 0; x < this.canvas.width; x++) {
+                const idx = (y * this.canvas.width + x) * 4;
+                // 检查像素是否不是白色（排除背景）
+                if (data[idx] !== 255 || data[idx + 1] !== 255 || data[idx + 2] !== 255) {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+        
+        // 添加边距
+        const padding = 20;
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX = Math.min(this.canvas.width, maxX + padding);
+        maxY = Math.min(this.canvas.height, maxY + padding);
+        
+        // 如果没有找到内容，返回整个画布
+        if (minX > maxX || minY > maxY) {
+            return { x: 0, y: 0, width: this.canvas.width, height: this.canvas.height };
+        }
+        
+        return {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+        };
+    }
+
+    // 修改上传图片的方法
+    async uploadForAnalysis() {
+        try {
+            // 获取有效内容区域
+            const bounds = this.getContentBounds();
+            console.log('Content bounds:', bounds);
+
+            // 创建临时画布来存储裁剪的内容
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = bounds.width;
+            tempCanvas.height = bounds.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // 设置白色背景
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, bounds.width, bounds.height);
+
+            // 复制内容区域
+            tempCtx.drawImage(
+                this.canvas,
+                bounds.x, bounds.y, bounds.width, bounds.height,
+                0, 0, bounds.width, bounds.height
+            );
+
+            // 转换为 blob
+            const blob = await new Promise(resolve => {
+                tempCanvas.toBlob(resolve, 'image/png');
+            });
+
+            console.log('Upload image size:', blob.size);
+
+            // 创建 FormData 并上传
+            const formData = new FormData();
+            formData.append('file', blob, 'drawing.png');
+
+            console.log('Sending request to server...');
+            const response = await fetch('https://ideasai.onrender.com/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            console.log('Server response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Server response:', result);
+
+            return result;
+        } catch (error) {
+            console.error('Upload failed:', error);
+            throw error;
+        }
+    }
 }
 
 function showProgressBar() {
@@ -422,13 +557,20 @@ function hideProgressBar() {
 }
 
 function displayResponse(response) {
+    console.log('Displaying response:', response);
     const resultContainer = document.createElement('div');
     resultContainer.className = 'result-container';
     
-    const isError = response.includes('error') || response.includes('失败');
+    let content = response;
+    const isError = typeof response === 'string' && 
+                   (response.includes('error') || response.includes('失败'));
+    
+    if (typeof response === 'object') {
+        content = JSON.stringify(response, null, 2);
+    }
     
     resultContainer.innerHTML = `
-        <div class="result-content ${isError ? 'error' : ''}">${response}</div>
+        <div class="result-content ${isError ? 'error' : ''}">${content}</div>
         <button class="close-result">关闭</button>
     `;
     document.querySelector('.canvas-container').appendChild(resultContainer);

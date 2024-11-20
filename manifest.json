@@ -3,6 +3,12 @@
   "name": "小黑板",
   "description": "随身携带的创意画板，让灵感随手可画。支持自由绘画、几何图形、文字标注，是您记录想法、演示讲解的得力助手。",
   "version": "1.0",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
