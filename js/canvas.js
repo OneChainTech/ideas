@@ -119,38 +119,45 @@ class DrawingBoard {
             colorPreview.style.backgroundColor = colorPicker.value;
         }
 
-        const aiRenderButton = document.getElementById('aiRenderButton');
-        if (aiRenderButton) {
-            aiRenderButton.addEventListener('click', async () => {
-                if (this.isSubmitting) {
-                    return;
-                }
+        document.getElementById('aiRenderButton').addEventListener('click', async () => {
+            if (this.isSubmitting) return;
+            this.isSubmitting = true;
+
+            const progressBar = showProgressBar();
+            
+            try {
+                // 创建要上传的图像数据
+                const formData = new FormData();
+                const imageBlob = await new Promise(resolve => {
+                    this.canvas.toBlob(resolve, 'image/png');
+                });
+                formData.append('file', imageBlob, 'drawing.png');
+
+                // 上传图像并获取分析结果
+                const response = await uploadImage(formData);
                 
-                try {
-                    this.isSubmitting = true;
-                    aiRenderButton.disabled = true;
-                    aiRenderButton.style.opacity = '0.5';
+                // 从返回的文本中提取 mermaid 代码
+                const mermaidMatch = response.match(/```mermaid\n([\s\S]*?)```/);
+                if (mermaidMatch && mermaidMatch[1]) {
+                    const mermaidCode = mermaidMatch[1].trim();
+                    console.log('Extracted mermaid code:', mermaidCode);
                     
-                    const progressBar = showProgressBar();
-                    const result = await this.uploadForAnalysis();
-                    console.log('Analysis result:', result);
+                    // 渲染 mermaid 图表
+                    await renderMermaidDiagram(mermaidCode);
                     
-                    if (result && result.analysisResult) {
-                        displayResponse(result.analysisResult);
-                    } else {
-                        displayResponse('分析结果为空');
-                    }
-                } catch (error) {
-                    console.error('AI渲染失败:', error);
-                    displayResponse('AI渲染失败: ' + error.message);
-                } finally {
-                    this.isSubmitting = false;
-                    aiRenderButton.disabled = false;
-                    aiRenderButton.style.opacity = '1';
-                    hideProgressBar();
+                    // 保存当前状态
+                    this.saveState();
+                } else {
+                    throw new Error('未能识别出有效的流程图代码');
                 }
-            });
-        }
+            } catch (error) {
+                console.error('AI rendering failed:', error);
+                displayResponse(error.message || 'AI 渲染失败，请稍后重试');
+            } finally {
+                hideProgressBar();
+                this.isSubmitting = false;
+            }
+        });
 
         // 添加图片上传处理
         const imageUpload = document.getElementById('imageUpload');
@@ -634,6 +641,109 @@ function dataURLtoBlob(dataURL) {
         ia[i] = byteString.charCodeAt(i);
     }
     return new Blob([ab], { type: mimeString });
+}
+
+// 在文件开头初始化 mermaid
+mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose'
+});
+
+// 添加渲染 mermaid 图表的函数
+async function renderMermaidDiagram(mermaidCode) {
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    // 设置容器宽度与画布相同，确保生成的SVG大小合适
+    tempContainer.style.width = document.getElementById('drawingBoard').width + 'px';
+    document.body.appendChild(tempContainer);
+
+    try {
+        // 配置 mermaid 渲染选项
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        // 渲染 mermaid 图表
+        const { svg } = await mermaid.render('mermaid-diagram', mermaidCode);
+        
+        // 创建一个临时的 SVG 容器来调整 SVG 大小
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = svg;
+        const svgElement = tempDiv.querySelector('svg');
+        
+        // 获取画布尺寸
+        const canvas = document.getElementById('drawingBoard');
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        
+        // 设置 SVG 尺寸以适应画布
+        svgElement.setAttribute('width', canvasWidth);
+        svgElement.setAttribute('height', canvasHeight);
+        svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        
+        // 将调整后的 SVG 转换为字符串
+        const adjustedSvg = tempDiv.innerHTML;
+        
+        // 创建图片对象
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            // 使用调整后的 SVG
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(adjustedSvg)));
+        });
+
+        // 获取画布上下文
+        const ctx = canvas.getContext('2d');
+        
+        // 保存当前画布状态到撤销栈
+        const currentState = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        
+        // 清除画布
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        
+        // 计算绘制位置和尺寸
+        const aspectRatio = img.width / img.height;
+        let drawWidth = canvasWidth * 0.9;
+        let drawHeight = drawWidth / aspectRatio;
+        
+        // 如果高度超出画布，则按高度计算
+        if (drawHeight > canvasHeight * 0.9) {
+            drawHeight = canvasHeight * 0.9;
+            drawWidth = drawHeight * aspectRatio;
+        }
+        
+        // 计算居中位置
+        const x = (canvasWidth - drawWidth) / 2;
+        const y = (canvasHeight - drawHeight) / 2;
+        
+        // 绘制图表
+        ctx.drawImage(img, x, y, drawWidth, drawHeight);
+
+        // 将当前状态添加到撤销栈
+        const drawingBoard = document.querySelector('#drawingBoard').__drawingBoard;
+        if (drawingBoard) {
+            drawingBoard.undoStack.push(currentState);
+            drawingBoard.saveState();
+        }
+
+    } catch (error) {
+        console.error('Mermaid rendering failed:', error);
+        throw new Error('流程图渲染失败：' + error.message);
+    } finally {
+        // 清理临时容器
+        document.body.removeChild(tempContainer);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
