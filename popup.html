@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>智能画板助手</title>
+    <title>小黑板</title>
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
@@ -41,6 +41,13 @@
                 <button id="undo" class="icon-button" title="撤销">
                     <span class="material-icons">undo</span>
                 </button>
+                <label for="imageUpload" class="icon-button" title="上传图片">
+                    <span class="material-icons">image</span>
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                <button id="aiRenderButton" class="icon-button" title="AI渲染">
+                    <span class="material-icons">auto_awesome</span>
+                </button>
                 <div class="color-picker-wrapper">
                     <input type="color" id="colorPicker" value="#000000">
                     <div class="color-preview"></div>
@@ -53,13 +60,6 @@
                 </button>
                 <button id="save" class="icon-button" title="保存">
                     <span class="material-icons">save</span>
-                </button>
-                <label for="imageUpload" class="icon-button" title="上传图片">
-                    <span class="material-icons">image</span>
-                </label>
-                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-                <button id="aiRenderButton" class="icon-button" title="AI渲染">
-                    <span class="material-icons">auto_awesome</span>
                 </button>
             </div>
         </div>
