@@ -1,5 +1,3 @@
-// 在 DrawingBoard 类之前添加这些辅助函数
-
 function showProgressBar() {
     const progressContainer = document.createElement('div');
     progressContainer.className = 'progress-container';
@@ -45,19 +43,72 @@ function displayResponse(response) {
 }
 
 async function renderMermaidDiagram(mermaidCode) {
-    // 创建一个新的 div 元素来渲染 mermaid 图表
-    const element = document.createElement('div');
-    element.className = 'mermaid';
-    element.innerHTML = mermaidCode;
+    try {
+        let code = mermaidCode;
+        
+        if (code.includes('```mermaid')) {
+            code = code.replace(/```mermaid\n([\s\S]*?)```/, '$1');
+        }
+        
+        code = code.trim();
+        
+        if (!code.startsWith('graph') && !code.startsWith('flowchart')) {
+            code = 'flowchart TD\n' + code;
+        }
+        
+        console.log('最终处理的 Mermaid 代码:', code);
 
-    // 将新元素添加到画布容器中
-    document.querySelector('.canvas-container').appendChild(element);
+        // 创建结果容器
+        const resultContainer = document.createElement('div');
+        resultContainer.className = 'mermaid-result-container';
+        resultContainer.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        `;
 
-    // 渲染 mermaid 图表
-    await mermaid.init();
-    mermaid.render('mermaidDiagram', mermaidCode, (svgCode) => {
-        element.innerHTML = svgCode;
-    });
+        // 创建关闭按钮
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '关闭';
+        closeButton.style.cssText = `
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+        closeButton.onclick = () => resultContainer.remove();
+
+        // 创建 mermaid 容器
+        const mermaidContainer = document.createElement('div');
+        mermaidContainer.style.cssText = `
+            margin-top: 30px;
+            min-width: 300px;
+            min-height: 200px;
+        `;
+
+        resultContainer.appendChild(closeButton);
+        resultContainer.appendChild(mermaidContainer);
+        document.querySelector('.canvas-container').appendChild(resultContainer);
+
+        // 渲染 mermaid 图表
+        const { svg } = await mermaid.render('mermaid-' + Date.now(), code);
+        mermaidContainer.innerHTML = svg;
+
+    } catch (error) {
+        console.error('Mermaid rendering error:', error);
+        console.error('Problematic code:', code);
+        throw new Error('Mermaid 图表渲染失败: ' + error.message);
+    }
 }
 
 class DrawingBoard {
@@ -79,7 +130,6 @@ class DrawingBoard {
         this.setupEventListeners();
         this.loadState();
         
-        // 添加初始空白状态
         this.emptyState = JSON.stringify({
             version: "5.3.1",
             objects: [],
@@ -127,7 +177,6 @@ class DrawingBoard {
         this.fabricCanvas.on('mouse:move', (e) => this.onMouseMove(e));
         this.fabricCanvas.on('mouse:up', () => this.onMouseUp());
 
-        // 设置选中对象的控制点默认样式
         fabric.Object.prototype.set({
             borderColor: '#666666',         // 灰色边框
             cornerColor: '#ffffff',         // 白色控制点
@@ -139,7 +188,6 @@ class DrawingBoard {
             borderScaleFactor: 1            // 边框粗细
         });
 
-        // 自定义选中时的样式
         this.fabricCanvas.on('selection:created', (e) => this.updateSelectionStyle(e));
         this.fabricCanvas.on('selection:updated', (e) => this.updateSelectionStyle(e));
     }
@@ -159,16 +207,8 @@ class DrawingBoard {
             const progressBar = showProgressBar();
             
             try {
-                // 获取画布内容的边界
                 const bounds = this.getContentBounds();
                 
-                // 创建临时画布来存储裁剪的内容
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = bounds.width;
-                tempCanvas.height = bounds.height;
-                const tempCtx = tempCanvas.getContext('2d');
-
-                // 复制内容区域
                 const imageData = this.fabricCanvas.toDataURL({
                     format: 'png',
                     quality: 1,
@@ -178,37 +218,37 @@ class DrawingBoard {
                     height: bounds.height
                 });
 
-                // 创建 FormData 并上传
-                const formData = new FormData();
-                const blob = await (await fetch(imageData)).blob();
-                formData.append('file', blob, 'drawing.png');
-
-                // 调用 API
-                const response = await fetch('https://ideasai.onrender.com/upload', {
-                    method: 'POST',
-                    body: formData
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage(
+                        { 
+                            type: 'uploadImage', 
+                            imageData: imageData 
+                        },
+                        response => {
+                            console.log('后台返回原始数据:', response);
+                            
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                                return;
+                            }
+                            if (!response || !response.success) {
+                                reject(new Error(response.error || '上传失败'));
+                                return;
+                            }
+                            resolve(response.data);
+                        }
+                    );
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                console.log('处理后的响应数据:', response);
+
+                if (!response || !response.analysisResult) {
+                    throw new Error('服务器返回的数据格式不正确');
                 }
 
-                const result = await response.json();
-                
-                // 从返回的文本中提取 mermaid 代码
-                const mermaidMatch = result.analysisResult.match(/```mermaid\n([\s\S]*?)```/);
-                if (mermaidMatch && mermaidMatch[1]) {
-                    const mermaidCode = mermaidMatch[1].trim();
-                    console.log('Extracted mermaid code:', mermaidCode);
-                    
-                    // 渲染 mermaid 图表
-                    await renderMermaidDiagram(mermaidCode);
-                    
-                    // 保存当前状态
-                    this.saveState();
-                } else {
-                    throw new Error('未能识别出有效的流程图代码');
-                }
+                await renderMermaidDiagram(response.analysisResult);
+                displayResponse(response.analysisResult);
+
             } catch (error) {
                 console.error('AI rendering failed:', error);
                 displayResponse(error.message || 'AI 渲染失败，请稍后重试');
@@ -247,16 +287,6 @@ class DrawingBoard {
         });
 
         const textContent = document.getElementById('textContent');
-        // 移除文本输入的回车键监听
-        /*
-        textContent.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('confirmText').click();
-            }
-        });
-        */
-
         document.getElementById('confirmText').addEventListener('click', () => {
             const textInput = document.getElementById('textInput');
             const text = textContent.value.trim();
@@ -293,21 +323,17 @@ class DrawingBoard {
             const textInput = document.getElementById('textInput');
             const textContent = document.getElementById('textContent');
             
-            // 计算文本输入框位置，确保不会超出画布边界
             let left = e.e.offsetX;
             let top = e.e.offsetY;
             
-            // 如太靠右边，向左偏移
-            if (left + 220 > this.fabricCanvas.width) {  // 增加一些边距
+            if (left + 220 > this.fabricCanvas.width) {
                 left = this.fabricCanvas.width - 220;
             }
             
-            // 如果太靠下边，向上偏移
-            if (top + 160 > this.fabricCanvas.height) {  // 增加一些边距
+            if (top + 160 > this.fabricCanvas.height) {
                 top = this.fabricCanvas.height - 160;
             }
             
-            // 确保位置不会为负值
             left = Math.max(0, left);
             top = Math.max(0, top);
             
@@ -413,35 +439,18 @@ class DrawingBoard {
     }
 
     undo() {
-        if (this.undoStack.length > 1) {  // 确保有多于一个状态
-            try {
-                // 将当前状态移到重做栈
-                const currentState = this.undoStack.pop();
-                if (currentState) {
-                    this.redoStack.push(currentState);
-                }
-
-                // 获取上一个状态
+        if (this.undoStack.length > 1) {
+            const currentState = this.undoStack.pop();
+            if (currentState) {
+                this.redoStack.push(currentState);
                 const previousState = this.undoStack[this.undoStack.length - 1];
-                if (!previousState) {
-                    console.error('No previous state found');
-                    return;
-                }
-
-                // 解析并加载状态
-                const stateObj = JSON.parse(previousState);
-                this.fabricCanvas.loadFromJSON(stateObj, () => {
-                    this.fabricCanvas.renderAll();
-                    localStorage.setItem('drawingBoardState', previousState);
-                });
-            } catch (error) {
-                console.error('Error during undo:', error);
-                // 出错时恢复状态
-                if (this.redoStack.length > 0) {
-                    const state = this.redoStack.pop();
-                    if (state) {
-                        this.undoStack.push(state);
-                    }
+                
+                if (previousState) {
+                    const stateObj = JSON.parse(previousState);
+                    this.fabricCanvas.loadFromJSON(stateObj, () => {
+                        this.fabricCanvas.renderAll();
+                        localStorage.setItem('drawingBoardState', previousState);
+                    });
                 }
             }
         }
@@ -469,14 +478,12 @@ class DrawingBoard {
     setMode(mode) {
         this.mode = mode;
         
-        // 隐藏文本输入框
         const textInput = document.getElementById('textInput');
         if (textInput) {
             textInput.style.display = 'none';
             document.getElementById('textContent').value = '';
         }
         
-        // 先清除所有选中的对象
         this.fabricCanvas.discardActiveObject();
         this.fabricCanvas.renderAll();
         
@@ -517,7 +524,6 @@ class DrawingBoard {
                 break;
         }
 
-        // 更新工具栏按钮状态
         const buttons = ['pen', 'eraser', 'text', 'select'];
         buttons.forEach(btn => {
             const element = document.getElementById(btn);
@@ -535,7 +541,6 @@ class DrawingBoard {
         }
     }
 
-    // 添加新方法：使所有对象可选择
     makeObjectsSelectable() {
         this.fabricCanvas.getObjects().forEach(obj => {
             obj.selectable = true;
@@ -543,7 +548,6 @@ class DrawingBoard {
         });
     }
 
-    // 添加新方法：使所有对象不可选择
     makeObjectsUnselectable() {
         this.fabricCanvas.getObjects().forEach(obj => {
             obj.selectable = false;
@@ -553,11 +557,9 @@ class DrawingBoard {
 
     saveState() {
         try {
-            // 获取当前画布状态
             const currentState = this.fabricCanvas.toJSON(['selectable', 'evented']);
             const currentStateStr = JSON.stringify(currentState);
 
-            // 如果是第一次操作，确保有初始空白状态
             if (this.undoStack.length === 0) {
                 const emptyState = {
                     version: "5.3.1",
@@ -567,22 +569,18 @@ class DrawingBoard {
                 this.undoStack.push(JSON.stringify(emptyState));
             }
 
-            // 检查新状态是否与当前状态相同
             const lastState = this.undoStack[this.undoStack.length - 1];
             if (lastState === currentStateStr) {
                 return;
             }
 
-            // 添加新状态
             this.undoStack.push(currentStateStr);
-            this.redoStack = [];  // 清空重做栈
+            this.redoStack = [];
 
-            // 限制撤销栈大小
             if (this.undoStack.length > 50) {
                 this.undoStack.shift();
             }
 
-            // 保存到 localStorage
             localStorage.setItem('drawingBoardState', currentStateStr);
         } catch (error) {
             console.error('Error saving state:', error);
@@ -598,7 +596,6 @@ class DrawingBoard {
                 this.fabricCanvas.loadFromJSON(stateObj, () => {
                     this.fabricCanvas.renderAll();
                     
-                    // 初始化状态栈，确保包含初始空白状态
                     this.undoStack = [this.emptyState];
                     if (savedState !== this.emptyState) {
                         this.undoStack.push(savedState);
@@ -679,14 +676,13 @@ class DrawingBoard {
     }
 
     addText(text, x, y) {
-        // 处理多行文本
         const fabricText = new fabric.Textbox(text, {
             left: x,
             top: y,
             fontSize: 16,
             fill: this.colorPicker.value,
-            width: 200,  // 设置文本框宽度
-            breakWords: true,  // 允许单词换行
+            width: 200,
+            breakWords: true,
             selectable: false,
             evented: false
         });
@@ -722,18 +718,15 @@ class DrawingBoard {
     }
 
     saveImage() {
-        // 创建一个临时画布，尺寸是原画布的2倍
         const tempCanvas = document.createElement('canvas');
-        const scale = 2;  // 缩放比例
+        const scale = 2;
         tempCanvas.width = this.fabricCanvas.width * scale;
         tempCanvas.height = this.fabricCanvas.height * scale;
         
-        // 创建临时的 fabric canvas
         const tempFabricCanvas = new fabric.Canvas(tempCanvas);
         tempFabricCanvas.setWidth(this.fabricCanvas.width * scale);
         tempFabricCanvas.setHeight(this.fabricCanvas.height * scale);
         
-        // 复制原画布的内容并缩放
         this.fabricCanvas.getObjects().forEach(obj => {
             const clonedObj = fabric.util.object.clone(obj);
             clonedObj.scaleX = obj.scaleX * scale;
@@ -746,58 +739,50 @@ class DrawingBoard {
             tempFabricCanvas.add(clonedObj);
         });
         
-        // 设置背景色
         tempFabricCanvas.setBackgroundColor('#FFFFFF', tempFabricCanvas.renderAll.bind(tempFabricCanvas));
         
-        // 导出高分辨率图片
         const dataURL = tempFabricCanvas.toDataURL({
             format: 'png',
             quality: 1,
             multiplier: 1
         });
         
-        // 清理时画布
         tempFabricCanvas.dispose();
         
-        // 下载图片
         const link = document.createElement('a');
         link.download = `drawing-${new Date().toISOString().slice(0,10)}.png`;
         link.href = dataURL;
         link.click();
     }
 
-    // 添加新方法：更新选中对象的样式
     updateSelectionStyle(e) {
         const activeObject = e.selected[0];
         if (activeObject) {
-            // 设置选中对象的特定样式
             activeObject.set({
-                borderColor: '#666666',         // 改为灰色边框
-                cornerColor: '#ffffff',         // 白色控制点
-                cornerSize: 6,                  // 控制点大小
-                cornerStyle: 'circle',          // 圆形控制点
-                transparentCorners: false,      // 不透明控制点
-                cornerStrokeColor: '#666666',   // 灰色控制点边框
+                borderColor: '#666666',
+                cornerColor: '#ffffff',
+                cornerSize: 6,
+                cornerStyle: 'circle',
+                transparentCorners: false,
+                cornerStrokeColor: '#666666',
                 padding: 0,
-                hasRotatingPoint: false,        // 隐藏旋转控制点
+                hasRotatingPoint: false,
                 hasControls: true,
                 hasBorders: true,
-                borderScaleFactor: 1            // 边框粗细
+                borderScaleFactor: 1
             });
 
-            // 设置只显示角落的控制点
             activeObject.setControlsVisibility({
-                mt: false,     // 中上
-                mb: false,     // 中下
-                ml: false,     // 中左
-                mr: false      // 中右
+                mt: false,
+                mb: false,
+                ml: false,
+                mr: false
             });
 
             this.fabricCanvas.renderAll();
         }
     }
 
-    // 添加 getContentBounds 方法
     getContentBounds() {
         const objects = this.fabricCanvas.getObjects();
         if (objects.length === 0) {
@@ -809,7 +794,6 @@ class DrawingBoard {
             };
         }
 
-        // 获取所有对象的边界
         let minX = this.fabricCanvas.width;
         let minY = this.fabricCanvas.height;
         let maxX = 0;
@@ -823,7 +807,6 @@ class DrawingBoard {
             maxY = Math.max(maxY, bound.top + bound.height);
         });
 
-        // 添加边距
         const padding = 20;
         minX = Math.max(0, minX - padding);
         minY = Math.max(0, minY - padding);
