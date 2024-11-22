@@ -246,8 +246,7 @@ class DrawingBoard {
                     throw new Error('服务器返回的数据格式不正确');
                 }
 
-                await renderMermaidDiagram(response.analysisResult);
-                displayResponse(response.analysisResult);
+                await window.mermaidRenderer.showRenderer(response.analysisResult);
 
             } catch (error) {
                 console.error('AI rendering failed:', error);
