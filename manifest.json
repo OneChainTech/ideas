@@ -19,7 +19,6 @@
     }
   },
   "permissions": [
-    "scripting"
   ],
   "host_permissions": [
     "https://ideasai.onrender.com/*"
@@ -27,5 +26,8 @@
   "background": {
     "service_worker": "js/background.js",
     "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 } 

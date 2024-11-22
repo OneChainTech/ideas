@@ -128,19 +128,19 @@ body {
 
 .canvas-container {
     position: relative;
-    margin: 16px;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     width: 768px;
     height: 520px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid #ddd;
 }
 
-canvas {
-    background: white;
-    display: block;
-    width: 768px;
-    height: 520px;
+.canvas-container canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
 }
 
 .dropdown {
@@ -200,36 +200,52 @@ canvas {
 .text-input {
     position: absolute;
     background: white;
-    padding: 16px;
+    padding: 12px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 240px;
+    z-index: 1000;
 }
 
-.text-input input {
-    width: 240px;
-    padding: 8px 12px;
+.text-input textarea {
+    width: 100%;
+    height: 100px;
+    padding: 10px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     margin-bottom: 12px;
     font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.text-input textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 .text-input .button-group {
     display: flex;
     gap: 8px;
-    justify-content: flex-end;
+    justify-content: center;
 }
 
 .text-input button {
-    padding: 6px 16px;
+    min-width: 60px;
+    padding: 6px 12px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 14px;
+    background-color: var(--gray-light);
 }
 
 .text-input button:hover {
-    background-color: var(--primary-light);
+    background-color: var(--border-color);
 }
 
 #confirmText {
@@ -238,11 +254,16 @@ canvas {
 }
 
 #confirmText:hover {
-    background-color: var(--primary-dark);
+    background-color: var(--primary-color);
+    color: white;
 }
 
 #cancelText {
     background-color: var(--gray-light);
+}
+
+#cancelText:hover {
+    background-color: var(--border-color);
 }
 
 /* 进度条样式 */
@@ -350,5 +371,26 @@ canvas {
     padding: 10px;
     border-left: 4px solid #f44336;
     background-color: #ffebee;
+}
+
+/* 添加工具按钮悬停效果 */
+#pen:hover + .canvas-container canvas {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/></svg>') 0 24, auto !important;
+}
+
+#eraser:hover + .canvas-container canvas {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l11.19-11.19c.79-.78 2.05-.78 2.84 0l-.6.59z"/></svg>') 0 24, auto !important;
+}
+
+#text:hover + .canvas-container canvas {
+    cursor: text !important;
+}
+
+#shape:hover + .canvas-container canvas {
+    cursor: crosshair !important;
+}
+
+#select:hover + .canvas-container canvas {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M12 2L2 22l10-6 10 6L12 2z"/></svg>') 0 0, auto !important;
 }
  

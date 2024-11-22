@@ -1,79 +1,143 @@
 class DrawingBoard {
     constructor() {
-        this.canvas = document.getElementById('drawingBoard');
-        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-        this.isDrawing = false;
-        this.undoStack = [];
         this.mode = 'pen';
+        this.colorPicker = document.getElementById('colorPicker');
+        this.isSubmitting = false;
+        this.undoStack = [];
+        this.redoStack = [];
+        this.isFirstDraw = true;
+        this.currentStateIndex = -1;
+        this.currentShape = null;
+        this.isDrawing = false;
         this.startX = 0;
         this.startY = 0;
-        this.tempCanvas = document.createElement('canvas');
-        this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true });
-        this.colorPicker = document.getElementById('colorPicker');
-        this.initializeCanvas();
+        this.currentShapeIcon = null;
+        
+        this.initializeFabricCanvas();
         this.setupEventListeners();
         this.loadState();
-        this.lastDrawTime = 0;
-        this.drawRequestId = null;
-        this.lastState = null;
-        this.currentShape = null;
-        this.backgroundImage = null;
-        this.isSubmitting = false;
+        
+        // 添加初始空白状态
+        this.emptyState = JSON.stringify({
+            version: "5.3.1",
+            objects: [],
+            background: "#FFFFFF"
+        });
     }
 
-    initializeCanvas() {
-        this.canvas.width = 768;
-        this.canvas.height = 520;
-        this.tempCanvas.width = 768;
-        this.tempCanvas.height = 520;
+    initializeFabricCanvas() {
+        const oldCanvas = document.getElementById('drawingBoard');
+        const container = oldCanvas.parentElement;
+        oldCanvas.remove();
+
+        const canvas = document.createElement('canvas');
+        canvas.id = 'drawingBoard';
+        container.insertBefore(canvas, container.firstChild);
+
+        this.fabricCanvas = new fabric.Canvas('drawingBoard', {
+            width: 768,
+            height: 520,
+            isDrawingMode: true,
+            backgroundColor: '#FFFFFF',
+            selection: true
+        });
+
+        const canvasEl = this.fabricCanvas.getElement();
+        canvasEl.style.width = '100%';
+        canvasEl.style.height = '100%';
         
-        this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-        this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true });
-        
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        this.ctx.strokeStyle = '#000000';
-        this.ctx.lineWidth = 2;
-        this.ctx.lineCap = 'round';
-        this.ctx.font = '16px Arial';
+        this.fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(this.fabricCanvas);
+        this.fabricCanvas.freeDrawingBrush.width = 2;
+        this.fabricCanvas.freeDrawingBrush.color = '#000000';
+
+        this.fabricCanvas.selection = true;
+        this.fabricCanvas.preserveObjectStacking = true;
+
+        this.fabricCanvas.on('object:added', () => {
+            this.saveState();
+        });
+
+        this.fabricCanvas.on('object:modified', () => {
+            this.saveState();
+        });
+
+        this.fabricCanvas.on('mouse:down', (e) => this.onMouseDown(e));
+        this.fabricCanvas.on('mouse:move', (e) => this.onMouseMove(e));
+        this.fabricCanvas.on('mouse:up', () => this.onMouseUp());
+
+        // 设置选中对象的控制点样式
+        fabric.Object.prototype.set({
+            borderColor: '#2196F3',           // 边框颜色
+            borderScaleFactor: 1,             // 边框粗细
+            cornerColor: '#2196F3',           // 控制点颜色
+            cornerSize: 8,                    // 控制点大小
+            cornerStyle: 'circle',            // 控制点样式：圆形
+            transparentCorners: false,        // 控制点不透明
+            cornerStrokeColor: '#ffffff',     // 控制点边框颜色
+            padding: 0                        // 选中框内边距
+        });
+
+        // 自定义选中时的样式
+        this.fabricCanvas.on('selection:created', (e) => this.updateSelectionStyle(e));
+        this.fabricCanvas.on('selection:updated', (e) => this.updateSelectionStyle(e));
     }
 
     setupEventListeners() {
-        this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
-        this.canvas.addEventListener('mousemove', this.draw.bind(this));
-        this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
-        this.canvas.addEventListener('mouseout', this.stopDrawing.bind(this));
+        document.getElementById('pen').addEventListener('click', () => this.setMode('pen'));
+        document.getElementById('eraser').addEventListener('click', () => this.setMode('eraser'));
+        document.getElementById('text').addEventListener('click', () => this.setMode('text'));
+        document.getElementById('select').addEventListener('click', () => this.setMode('select'));
+        document.getElementById('new').addEventListener('click', () => this.clearCanvas());
+        document.getElementById('save').addEventListener('click', () => this.saveImage());
+        document.getElementById('undo').addEventListener('click', () => this.undo());
 
-        document.getElementById('colorPicker').addEventListener('change', (e) => {
-            this.ctx.strokeStyle = e.target.value;
-            this.ctx.fillStyle = e.target.value;
-        });
-
-        document.getElementById('undo').addEventListener('click', () => {
-            this.undo();
-        });
-
-        document.getElementById('pen').addEventListener('click', () => {
-            this.setMode('pen');
-        });
-
-        document.getElementById('text').addEventListener('click', () => {
-            this.setMode('text');
-        });
-
-        document.getElementById('new').addEventListener('click', () => {
-            this.clearCanvas();
-        });
-
-        this.canvas.addEventListener('click', (e) => {
-            if (this.mode === 'text') {
-                this.handleTextInput(e);
+        this.colorPicker.addEventListener('change', (e) => {
+            const color = e.target.value;
+            this.fabricCanvas.freeDrawingBrush.color = color;
+            if (this.fabricCanvas.getActiveObject()) {
+                const activeObject = this.fabricCanvas.getActiveObject();
+                if (activeObject.type === 'text') {
+                    activeObject.set('fill', color);
+                } else {
+                    activeObject.set('stroke', color);
+                }
+                this.fabricCanvas.renderAll();
             }
         });
 
+        document.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const dropdownItem = e.target.closest('.dropdown-item');
+                const shape = dropdownItem.dataset.shape;
+                const icon = dropdownItem.querySelector('.material-icons').textContent;
+                this.currentShape = shape;
+                this.currentShapeIcon = icon;
+                this.setMode('shape');
+                
+                const shapeButton = document.getElementById('shape');
+                shapeButton.innerHTML = `<span class="material-icons">${icon}</span>`;
+            });
+        });
+
+        const textContent = document.getElementById('textContent');
+        // 移除文本输入的回车键监听
+        /*
+        textContent.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('confirmText').click();
+            }
+        });
+        */
+
         document.getElementById('confirmText').addEventListener('click', () => {
-            this.addText();
+            const textInput = document.getElementById('textInput');
+            const text = textContent.value.trim();
+            if (text) {
+                this.addText(text, parseInt(textInput.dataset.x), parseInt(textInput.dataset.y));
+            }
+            textInput.style.display = 'none';
+            textContent.value = '';
         });
 
         document.getElementById('cancelText').addEventListener('click', () => {
@@ -82,670 +146,516 @@ class DrawingBoard {
             document.getElementById('textContent').value = '';
         });
 
-        setInterval(() => this.saveState(), 1000);
-
-        document.getElementById('eraser').addEventListener('click', () => {
-            this.setMode('eraser');
+        document.getElementById('imageUpload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.loadImage(file);
+            }
+            e.target.value = '';
         });
+    }
 
-        document.querySelectorAll('.dropdown-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const shape = e.target.dataset.shape;
-                this.setMode('shape');
-                this.currentShape = shape;
-                document.querySelectorAll('.dropdown-item').forEach(i => {
-                    i.classList.remove('active');
-                });
-                e.target.classList.add('active');
-                
-                const shapeButton = document.getElementById('shape');
-                const icon = e.target.querySelector('.material-icons').textContent;
-                shapeButton.innerHTML = `<span class="material-icons">${icon}</span>`;
-            });
-        });
+    onMouseDown(e) {
+        if (this.mode === 'shape') {
+            this.isDrawing = true;
+            const pointer = this.fabricCanvas.getPointer(e.e);
+            this.startX = pointer.x;
+            this.startY = pointer.y;
+        } else if (this.mode === 'text') {
+            const pointer = this.fabricCanvas.getPointer(e.e);
+            const textInput = document.getElementById('textInput');
+            const textContent = document.getElementById('textContent');
+            
+            // 计算文本输入框位置，确保不会超出画布边界
+            let left = e.e.offsetX;
+            let top = e.e.offsetY;
+            
+            // 如太靠右边，向左偏移
+            if (left + 220 > this.fabricCanvas.width) {  // 增加一些边距
+                left = this.fabricCanvas.width - 220;
+            }
+            
+            // 如果太靠下边，向上偏移
+            if (top + 160 > this.fabricCanvas.height) {  // 增加一些边距
+                top = this.fabricCanvas.height - 160;
+            }
+            
+            // 确保位置不会为负值
+            left = Math.max(0, left);
+            top = Math.max(0, top);
+            
+            textInput.style.display = 'block';
+            textInput.style.left = `${left}px`;
+            textInput.style.top = `${top}px`;
+            textInput.dataset.x = pointer.x;
+            textInput.dataset.y = pointer.y;
+            
+            textContent.value = '';
+            textContent.focus();
+        }
+    }
 
-        document.getElementById('save').addEventListener('click', () => {
-            this.saveImage();
-        });
+    onMouseMove(e) {
+        if (!this.isDrawing || this.mode !== 'shape') return;
 
-        const colorPicker = document.getElementById('colorPicker');
-        const colorPreview = document.querySelector('.color-preview');
-        if (colorPicker && colorPreview) {
-            colorPicker.addEventListener('change', (e) => {
-                this.ctx.strokeStyle = e.target.value;
-                this.ctx.fillStyle = e.target.value;
-                colorPreview.style.backgroundColor = e.target.value;
-            });
-            colorPreview.style.backgroundColor = colorPicker.value;
+        const pointer = this.fabricCanvas.getPointer(e.e);
+        if (this.tempShape) {
+            this.fabricCanvas.remove(this.tempShape);
         }
 
-        document.getElementById('aiRenderButton').addEventListener('click', async () => {
-            if (this.isSubmitting) return;
-            this.isSubmitting = true;
+        const points = {
+            x: Math.min(this.startX, pointer.x),
+            y: Math.min(this.startY, pointer.y),
+            width: Math.abs(pointer.x - this.startX),
+            height: Math.abs(pointer.y - this.startY),
+            startX: this.startX,
+            startY: this.startY,
+            endX: pointer.x,
+            endY: pointer.y
+        };
 
-            const progressBar = showProgressBar();
-            
-            try {
-                // 创建要上传的图像数据
-                const formData = new FormData();
-                const imageBlob = await new Promise(resolve => {
-                    this.canvas.toBlob(resolve, 'image/png');
-                });
-                formData.append('file', imageBlob, 'drawing.png');
+        this.tempShape = this.createShape(this.currentShape, points);
+        if (this.tempShape) {
+            this.fabricCanvas.add(this.tempShape);
+            this.fabricCanvas.renderAll();
+        }
+    }
 
-                // 上传图像并获取分析结果
-                const response = await uploadImage(formData);
-                
-                // 从返回的文本中提取 mermaid 代码
-                const mermaidMatch = response.match(/```mermaid\n([\s\S]*?)```/);
-                if (mermaidMatch && mermaidMatch[1]) {
-                    const mermaidCode = mermaidMatch[1].trim();
-                    console.log('Extracted mermaid code:', mermaidCode);
-                    
-                    // 渲染 mermaid 图表
-                    await renderMermaidDiagram(mermaidCode);
-                    
-                    // 保存当前状态
-                    this.saveState();
-                } else {
-                    throw new Error('未能识别出有效的流程图代码');
-                }
-            } catch (error) {
-                console.error('AI rendering failed:', error);
-                displayResponse(error.message || 'AI 渲染失败，请稍后重试');
-            } finally {
-                hideProgressBar();
-                this.isSubmitting = false;
+    onMouseUp() {
+        if (this.isDrawing && this.mode === 'shape') {
+            this.isDrawing = false;
+            if (this.tempShape) {
+                this.tempShape.setCoords();
+                this.saveState();
+                this.tempShape = null;
             }
-        });
+        }
+    }
 
-        // 添加图片上传处理
-        const imageUpload = document.getElementById('imageUpload');
-        if (imageUpload) {
-            imageUpload.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    this.loadImage(file);
+    createShape(type, points) {
+        let shape;
+        const options = {
+            stroke: this.colorPicker.value,
+            strokeWidth: 2,
+            fill: 'transparent',
+            selectable: false,
+            evented: false
+        };
+
+        switch(type) {
+            case 'rect':
+                shape = new fabric.Rect({
+                    ...options,
+                    left: points.x,
+                    top: points.y,
+                    width: points.width,
+                    height: points.height
+                });
+                break;
+            case 'circle':
+                shape = new fabric.Ellipse({
+                    ...options,
+                    left: points.x,
+                    top: points.y,
+                    rx: points.width / 2,
+                    ry: points.height / 2
+                });
+                break;
+            case 'arrow':
+                const path = [
+                    'M', points.startX, points.startY,
+                    'L', points.endX, points.endY,
+                    'M', points.endX, points.endY
+                ];
+                
+                const angle = Math.atan2(points.endY - points.startY, points.endX - points.startX);
+                const headLength = 15;
+                
+                path.push(
+                    'L', points.endX - headLength * Math.cos(angle - Math.PI/6),
+                    points.endY - headLength * Math.sin(angle - Math.PI/6),
+                    'M', points.endX, points.endY,
+                    'L', points.endX - headLength * Math.cos(angle + Math.PI/6),
+                    points.endY - headLength * Math.sin(angle + Math.PI/6)
+                );
+                
+                shape = new fabric.Path(path.join(' '), options);
+                break;
+        }
+        return shape;
+    }
+
+    undo() {
+        if (this.undoStack.length > 1) {  // 确保有多于一个状态
+            try {
+                // 将当前状态移到重做栈
+                const currentState = this.undoStack.pop();
+                this.redoStack.push(currentState);
+
+                // 获取上一个状态
+                const previousState = this.undoStack[this.undoStack.length - 1];
+                const stateObj = JSON.parse(previousState);
+
+                // 加载上一个状态
+                this.fabricCanvas.loadFromJSON(stateObj, () => {
+                    this.fabricCanvas.renderAll();
+                    localStorage.setItem('drawingBoardState', previousState);
+                });
+            } catch (error) {
+                console.error('Error during undo:', error);
+                // 出错时恢复状态
+                if (this.redoStack.length > 0) {
+                    const state = this.redoStack.pop();
+                    this.undoStack.push(state);
                 }
-                // 清空 input 的值，这样同一张图片可以重复上传
-                imageUpload.value = '';
-            });
+            }
+        }
+    }
+
+    redo() {
+        if (this.redoStack.length > 0) {
+            const nextState = this.redoStack.pop();
+            this.undoStack.push(nextState);
+
+            try {
+                const stateObj = JSON.parse(nextState);
+                this.fabricCanvas.loadFromJSON(stateObj, () => {
+                    this.fabricCanvas.renderAll();
+                    localStorage.setItem('drawingBoardState', nextState);
+                });
+            } catch (error) {
+                console.error('Error during redo:', error);
+                this.undoStack.pop();
+                this.redoStack.push(nextState);
+            }
         }
     }
 
     setMode(mode) {
         this.mode = mode;
         
+        // 隐藏文本输入框
+        const textInput = document.getElementById('textInput');
+        if (textInput) {
+            textInput.style.display = 'none';
+            document.getElementById('textContent').value = '';
+        }
+        
+        // 先清除所有选中的对象
+        this.fabricCanvas.discardActiveObject();
+        this.fabricCanvas.renderAll();
+        
         switch(mode) {
             case 'pen':
-                this.canvas.style.cursor = 'crosshair';
+                this.fabricCanvas.isDrawingMode = true;
+                this.fabricCanvas.freeDrawingBrush.width = 2;
+                this.fabricCanvas.freeDrawingBrush.color = this.colorPicker.value;
+                this.fabricCanvas.selection = false;
+                this.makeObjectsUnselectable(false);
+                this.fabricCanvas.defaultCursor = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\'%3E%3Cpath d=\'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z\'/%3E%3C/svg%3E") 0 24, auto';
+                break;
+            case 'select':
+                this.fabricCanvas.isDrawingMode = false;
+                this.fabricCanvas.selection = true;
+                this.makeObjectsSelectable(true);
+                this.fabricCanvas.defaultCursor = 'default';
                 break;
             case 'eraser':
-                this.canvas.style.cursor = 'url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAQBJREFUOE+dlDEOgzAMRX8nyQmqnqJsZekBegc2lh6kJ2FhYmRh6QFyhx6lJ0BKJBRFwXYcNYuF7Pd+7GAbKT6qYr0RkTUzL4loKyL7pmleOedUxVJKW2PMEcCOmRdxvgNwF5FDCGG31vpENkpEFwBzZr7FxEtm3sQYL977KzNvAcyI6FxCLYAzgAUzX/I8O+dUxU0ArXPuHmM8pZTwJ4CU0sk5d2Lmg/e+qRHZKKV0jDEevfcXZp7kc/6wbPjzFbKR5YY1QK34r6Aq4FBgFfC/wYOBQ0AlMI+cc8Wm35OIzEII86EOywn5RkQWzPyIMR5TSk0J/AowxrSllL33/gkVYHUZX0UzNQAAAABJRU5ErkJggg==) 0 20, auto';
-                break;
-            case 'text':
-                this.canvas.style.cursor = 'text';
+                this.fabricCanvas.isDrawingMode = true;
+                this.fabricCanvas.freeDrawingBrush.width = 20;
+                this.fabricCanvas.freeDrawingBrush.color = '#FFFFFF';
+                this.fabricCanvas.selection = false;
+                this.makeObjectsUnselectable(false);
+                this.fabricCanvas.defaultCursor = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\'%3E%3Cpath d=\'M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l11.19-11.19c.79-.78 2.05-.78 2.84 0l-.6.59z\'/%3E%3C/svg%3E") 0 24, auto';
                 break;
             case 'shape':
-                this.canvas.style.cursor = 'crosshair';
+                this.fabricCanvas.isDrawingMode = false;
+                this.fabricCanvas.selection = false;
+                this.makeObjectsUnselectable(false);
+                this.fabricCanvas.defaultCursor = 'crosshair';
                 break;
-            default:
-                this.canvas.style.cursor = 'crosshair';
+            case 'text':
+                this.fabricCanvas.isDrawingMode = false;
+                this.fabricCanvas.selection = false;
+                this.makeObjectsUnselectable(false);
+                this.fabricCanvas.defaultCursor = 'text';
+                break;
         }
 
-        const buttons = ['pen', 'eraser', 'shape', 'text'];
+        // 更新工具栏按钮状态
+        const buttons = ['pen', 'eraser', 'text', 'select'];
         buttons.forEach(btn => {
             const element = document.getElementById(btn);
             if (element) {
                 element.classList.toggle('active', btn === mode);
             }
         });
+
+        const shapeButton = document.getElementById('shape');
+        if (mode === 'shape') {
+            shapeButton.classList.add('active');
+        } else {
+            shapeButton.classList.remove('active');
+            shapeButton.innerHTML = '<span class="material-icons">category</span>';
+        }
     }
 
-    clearCanvas() {
-        const currentFillStyle = this.ctx.fillStyle;
-        
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        this.ctx.fillStyle = currentFillStyle;
-        
-        this.backgroundImage = null;
-        this.undoStack = [];
-        this.saveState();
+    // 添加新方法：使所有对象可选择
+    makeObjectsSelectable() {
+        this.fabricCanvas.getObjects().forEach(obj => {
+            obj.selectable = true;
+            obj.evented = true;
+        });
+    }
+
+    // 添加新方法：使所有对象不可选择
+    makeObjectsUnselectable() {
+        this.fabricCanvas.getObjects().forEach(obj => {
+            obj.selectable = false;
+            obj.evented = false;
+        });
     }
 
     saveState() {
-        const imageData = this.canvas.toDataURL();
-        localStorage.setItem('drawingBoardState', imageData);
-        
-        const currentState = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-        if (this.undoStack.length === 0 || !this.compareImageData(currentState, this.undoStack[this.undoStack.length - 1])) {
-            this.undoStack.push(currentState);
-        }
-    }
+        try {
+            const currentState = JSON.stringify(this.fabricCanvas.toJSON(['selectable', 'evented']));
+            
+            // 如果是第一次操作，确保有初始空白状态
+            if (this.undoStack.length === 0) {
+                this.undoStack.push(this.emptyState);
+            }
 
-    compareImageData(imageData1, imageData2) {
-        const data1 = imageData1.data;
-        const data2 = imageData2.data;
-        if (data1.length !== data2.length) return false;
-        for (let i = 0; i < data1.length; i++) {
-            if (data1[i] !== data2[i]) return false;
+            // 检查新状态是否与当前状态相同
+            const lastState = this.undoStack[this.undoStack.length - 1];
+            if (lastState === currentState) {
+                return;
+            }
+
+            // 添加新状态
+            this.undoStack.push(currentState);
+            this.redoStack = [];  // 清空重做栈
+
+            // 限制撤销栈大小
+            if (this.undoStack.length > 50) {
+                this.undoStack.shift();
+            }
+
+            // 保存到 localStorage
+            localStorage.setItem('drawingBoardState', currentState);
+        } catch (error) {
+            console.error('Error saving state:', error);
         }
-        return true;
     }
 
     loadState() {
-        const savedState = localStorage.getItem('drawingBoardState');
-        if (savedState) {
-            const img = new Image();
-            img.onload = () => {
-                this.ctx.drawImage(img, 0, 0);
-                this.saveState();
-            };
-            img.src = savedState;
-        }
-    }
-
-    handleTextInput(e) {
-        const textInput = document.getElementById('textInput');
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        textInput.style.display = 'block';
-        textInput.style.left = `${x}px`;
-        textInput.style.top = `${y}px`;
-        textInput.dataset.x = x;
-        textInput.dataset.y = y;
-
-        const input = document.getElementById('textContent');
-        input.value = '';
-        input.focus();
-    }
-
-    addText() {
-        const textInput = document.getElementById('textInput');
-        const input = document.getElementById('textContent');
-        const text = input.value.trim();
-        
-        if (text) {
-            const x = parseInt(textInput.dataset.x);
-            const y = parseInt(textInput.dataset.y);
-            
-            this.ctx.fillStyle = this.colorPicker.value;
-            this.ctx.fillText(text, x, y);
-            this.saveState();
-        }
-
-        textInput.style.display = 'none';
-        input.value = '';
-    }
-
-    undo() {
-        if (this.undoStack.length > 1) {
-            this.undoStack.pop();
-            const previousState = this.undoStack[this.undoStack.length - 1];
-            this.ctx.putImageData(previousState, 0, 0);
-            const imageData = this.canvas.toDataURL();
-            localStorage.setItem('drawingBoardState', imageData);
-        } else if (this.undoStack.length === 1) {
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            this.undoStack = [];
-            localStorage.removeItem('drawingBoardState');
-        }
-    }
-
-    startDrawing(e) {
-        this.isDrawing = true;
-        const rect = this.canvas.getBoundingClientRect();
-        this.startX = e.clientX - rect.left;
-        this.startY = e.clientY - rect.top;
-
-        if (this.mode === 'pen' || this.mode === 'eraser') {
-            this.ctx.beginPath();
-            this.ctx.moveTo(this.startX, this.startY);
-            if (this.mode === 'eraser') {
-                this.ctx.globalCompositeOperation = 'destination-out';
-                this.ctx.lineWidth = 20;
+        try {
+            const savedState = localStorage.getItem('drawingBoardState');
+            if (savedState && savedState !== 'undefined') {
+                const stateObj = JSON.parse(savedState);
+                
+                this.fabricCanvas.loadFromJSON(stateObj, () => {
+                    this.fabricCanvas.renderAll();
+                    
+                    // 初始化状态栈，确保包含初始空白状态
+                    this.undoStack = [this.emptyState];
+                    if (savedState !== this.emptyState) {
+                        this.undoStack.push(savedState);
+                    }
+                    this.redoStack = [];
+                });
             } else {
-                this.ctx.globalCompositeOperation = 'source-over';
-                this.ctx.lineWidth = 2;
+                this.clearCanvas();
             }
-        } else if (this.mode === 'shape') {
-            this.lastState = this.undoStack[this.undoStack.length - 1];
+        } catch (error) {
+            console.error('Error loading state:', error);
+            this.clearCanvas();
         }
     }
 
-    drawArrow(fromX, fromY, toX, toY) {
-        const headLength = 15;
-        const angle = Math.atan2(toY - fromY, toX - fromX);
+    clearCanvas(resetStack = true) {
+        this.fabricCanvas.clear();
+        this.fabricCanvas.setBackgroundColor('#FFFFFF', this.fabricCanvas.renderAll.bind(this.fabricCanvas));
         
-        this.ctx.beginPath();
-        this.ctx.moveTo(fromX, fromY);
-        this.ctx.lineTo(toX, toY);
-        this.ctx.stroke();
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(toX, toY);
-        this.ctx.lineTo(
-            toX - headLength * Math.cos(angle - Math.PI / 6),
-            toY - headLength * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.moveTo(toX, toY);
-        this.ctx.lineTo(
-            toX - headLength * Math.cos(angle + Math.PI / 6),
-            toY - headLength * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.stroke();
-    }
-
-    draw(e) {
-        if (!this.isDrawing) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        if (this.mode === 'pen' || this.mode === 'eraser') {
-            this.ctx.lineTo(x, y);
-            this.ctx.stroke();
-        } else if (this.mode === 'shape') {
-            if (this.lastState) {
-                this.ctx.putImageData(this.lastState, 0, 0);
-            }
-
-            this.ctx.beginPath();
-            this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.lineWidth = 2;
-            
-            switch (this.currentShape) {
-                case 'rect':
-                    const width = x - this.startX;
-                    const height = y - this.startY;
-                    this.ctx.strokeRect(
-                        width > 0 ? this.startX : x,
-                        height > 0 ? this.startY : y,
-                        Math.abs(width),
-                        Math.abs(height)
-                    );
-                    break;
-                case 'circle':
-                    const w = Math.abs(x - this.startX);
-                    const h = Math.abs(y - this.startY);
-                    const centerX = Math.min(this.startX, x) + w / 2;
-                    const centerY = Math.min(this.startY, y) + h / 2;
-                    this.ctx.ellipse(centerX, centerY, w / 2, h / 2, 0, 0, 2 * Math.PI);
-                    this.ctx.stroke();
-                    break;
-                case 'arrow':
-                    this.drawArrow(this.startX, this.startY, x, y);
-                    break;
-            }
+        if (resetStack) {
+            this.undoStack = [this.emptyState];
+            this.redoStack = [];
+            this.isFirstDraw = true;
+            localStorage.setItem('drawingBoardState', this.emptyState);
         }
     }
 
-    stopDrawing(e) {
-        if (this.isDrawing) {
-            this.isDrawing = false;
-            this.lastState = null;
-            if (this.mode === 'eraser') {
-                this.ctx.globalCompositeOperation = 'source-over';
-                this.ctx.lineWidth = 2;
-            }
+    addShape(type, points) {
+        let shape;
+        
+        switch(type) {
+            case 'rect':
+                shape = new fabric.Rect({
+                    left: points.x,
+                    top: points.y,
+                    width: Math.abs(points.width),
+                    height: Math.abs(points.height),
+                    fill: 'transparent',
+                    stroke: this.colorPicker.value,
+                    strokeWidth: 2,
+                    selectable: false,
+                    evented: false
+                });
+                break;
+            case 'circle':
+                shape = new fabric.Ellipse({
+                    left: points.x,
+                    top: points.y,
+                    rx: Math.abs(points.width) / 2,
+                    ry: Math.abs(points.height) / 2,
+                    fill: 'transparent',
+                    stroke: this.colorPicker.value,
+                    strokeWidth: 2,
+                    selectable: false,
+                    evented: false
+                });
+                break;
+            case 'arrow':
+                const path = this.createArrowPath([
+                    points.startX, points.startY,
+                    points.endX, points.endY
+                ]);
+                shape = new fabric.Path(path, {
+                    fill: 'transparent',
+                    stroke: this.colorPicker.value,
+                    strokeWidth: 2,
+                    selectable: false,
+                    evented: false
+                });
+                break;
+        }
+
+        if (shape) {
+            this.fabricCanvas.add(shape);
+            this.fabricCanvas.renderAll();
             this.saveState();
         }
     }
 
-    saveImage() {
-        const link = document.createElement('a');
-        link.download = `drawing-${new Date().toISOString().slice(0,10)}.png`;
-        link.href = this.canvas.toDataURL();
-        link.click();
+    addText(text, x, y) {
+        // 处理多行文本
+        const fabricText = new fabric.Textbox(text, {
+            left: x,
+            top: y,
+            fontSize: 16,
+            fill: this.colorPicker.value,
+            width: 200,  // 设置文本框宽度
+            breakWords: true,  // 允许单词换行
+            selectable: false,
+            evented: false
+        });
+        
+        this.fabricCanvas.add(fabricText);
+        this.fabricCanvas.renderAll();
+        this.saveState();
     }
 
     loadImage(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            fabric.Image.fromURL(e.target.result, (img) => {
+                const maxWidth = this.fabricCanvas.width * 0.8;
+                const maxHeight = this.fabricCanvas.height * 0.8;
                 
-                const maxWidth = this.canvas.width * 0.8;
-                const maxHeight = this.canvas.height * 0.8;
+                if (img.width > maxWidth || img.height > maxHeight) {
+                    const scale = Math.min(
+                        maxWidth / img.width,
+                        maxHeight / img.height
+                    );
+                    img.scale(scale);
+                }
                 
-                const scale = Math.min(
-                    maxWidth / img.width,
-                    maxHeight / img.height
-                );
+                img.center();
                 
-                const x = (this.canvas.width - img.width * scale) / 2;
-                const y = (this.canvas.height - img.height * scale) / 2;
-                
-                this.ctx.drawImage(
-                    img,
-                    x, y,
-                    img.width * scale,
-                    img.height * scale
-                );
-                
-                this.backgroundImage = {
-                    image: img,
-                    x, y,
-                    width: img.width * scale,
-                    height: img.height * scale
-                };
-                
+                this.fabricCanvas.add(img);
+                this.fabricCanvas.renderAll();
                 this.saveState();
-            };
-            img.src = e.target.result;
+            });
         };
         reader.readAsDataURL(file);
     }
 
-    // 获取画布中有内容的区域
-    getContentBounds() {
-        const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-        const data = imageData.data;
-        let minX = this.canvas.width;
-        let minY = this.canvas.height;
-        let maxX = 0;
-        let maxY = 0;
+    saveImage() {
+        // 创建一个临时画布，尺寸是原画布的2倍
+        const tempCanvas = document.createElement('canvas');
+        const scale = 2;  // 缩放比例
+        tempCanvas.width = this.fabricCanvas.width * scale;
+        tempCanvas.height = this.fabricCanvas.height * scale;
         
-        // 遍历像素数据找到内容边界
-        for (let y = 0; y < this.canvas.height; y++) {
-            for (let x = 0; x < this.canvas.width; x++) {
-                const idx = (y * this.canvas.width + x) * 4;
-                // 检查像素是否不是白色（排除背景）
-                if (data[idx] !== 255 || data[idx + 1] !== 255 || data[idx + 2] !== 255) {
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                }
+        // 创建临时的 fabric canvas
+        const tempFabricCanvas = new fabric.Canvas(tempCanvas);
+        tempFabricCanvas.setWidth(this.fabricCanvas.width * scale);
+        tempFabricCanvas.setHeight(this.fabricCanvas.height * scale);
+        
+        // 复制原画布的内容并缩放
+        this.fabricCanvas.getObjects().forEach(obj => {
+            const clonedObj = fabric.util.object.clone(obj);
+            clonedObj.scaleX = obj.scaleX * scale;
+            clonedObj.scaleY = obj.scaleY * scale;
+            clonedObj.left = obj.left * scale;
+            clonedObj.top = obj.top * scale;
+            if (obj.type === 'text' || obj.type === 'textbox') {
+                clonedObj.fontSize = obj.fontSize * scale;
             }
-        }
+            tempFabricCanvas.add(clonedObj);
+        });
         
-        // 添加边距
-        const padding = 20;
-        minX = Math.max(0, minX - padding);
-        minY = Math.max(0, minY - padding);
-        maxX = Math.min(this.canvas.width, maxX + padding);
-        maxY = Math.min(this.canvas.height, maxY + padding);
+        // 设置背景色
+        tempFabricCanvas.setBackgroundColor('#FFFFFF', tempFabricCanvas.renderAll.bind(tempFabricCanvas));
         
-        // 如果没有找到内容，返回整个画布
-        if (minX > maxX || minY > maxY) {
-            return { x: 0, y: 0, width: this.canvas.width, height: this.canvas.height };
-        }
+        // 导出高分辨率图片
+        const dataURL = tempFabricCanvas.toDataURL({
+            format: 'png',
+            quality: 1,
+            multiplier: 1
+        });
         
-        return {
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY
-        };
+        // 清理临时画布
+        tempFabricCanvas.dispose();
+        
+        // 下载图片
+        const link = document.createElement('a');
+        link.download = `drawing-${new Date().toISOString().slice(0,10)}.png`;
+        link.href = dataURL;
+        link.click();
     }
 
-    // 修改上传图片的方法
-    async uploadForAnalysis() {
-        try {
-            // 获取有效内容区域
-            const bounds = this.getContentBounds();
-            console.log('Content bounds:', bounds);
-
-            // 创建临时画布来存储裁剪的内容
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = bounds.width;
-            tempCanvas.height = bounds.height;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            // 设置白色背景
-            tempCtx.fillStyle = '#FFFFFF';
-            tempCtx.fillRect(0, 0, bounds.width, bounds.height);
-
-            // 复制内容区域
-            tempCtx.drawImage(
-                this.canvas,
-                bounds.x, bounds.y, bounds.width, bounds.height,
-                0, 0, bounds.width, bounds.height
-            );
-
-            // 转换为 blob
-            const blob = await new Promise(resolve => {
-                tempCanvas.toBlob(resolve, 'image/png');
+    // 添加新方法：更新选中对象的样式
+    updateSelectionStyle(e) {
+        const activeObject = e.selected[0];
+        if (activeObject) {
+            // 设置选中对象的特定样式
+            activeObject.set({
+                borderColor: '#2196F3',
+                cornerColor: '#2196F3',
+                cornerSize: 6,                // 稍微减小控制点大小
+                cornerStyle: 'circle',
+                transparentCorners: false,
+                cornerStrokeColor: '#ffffff',
+                padding: 0,
+                // 只显示角落的控制点，隐藏边缘的控制点
+                hasRotatingPoint: false,      // 隐藏旋转控制点
+                hasControls: true,
+                hasBorders: true
             });
 
-            console.log('Upload image size:', blob.size);
-
-            // 创建 FormData 并上传
-            const formData = new FormData();
-            formData.append('file', blob, 'drawing.png');
-
-            console.log('Sending request to server...');
-            const response = await fetch('https://ideasai.onrender.com/upload', {
-                method: 'POST',
-                body: formData
+            // 设置只显示角落的控制点
+            activeObject.setControlsVisibility({
+                mt: false,     // 中上
+                mb: false,     // 中下
+                ml: false,     // 中左
+                mr: false      // 中右
             });
 
-            console.log('Server response status:', response.status);
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log('Server response:', result);
-
-            return result;
-        } catch (error) {
-            console.error('Upload failed:', error);
-            throw error;
+            this.fabricCanvas.renderAll();
         }
-    }
-}
-
-function showProgressBar() {
-    const progressContainer = document.createElement('div');
-    progressContainer.className = 'progress-container';
-    progressContainer.innerHTML = `
-        <div class="progress-bar">
-            <div class="progress-fill"></div>
-        </div>
-        <div class="progress-text">正在分析图像...</div>
-    `;
-    document.querySelector('.canvas-container').appendChild(progressContainer);
-    return progressContainer;
-}
-
-function hideProgressBar() {
-    const progressContainer = document.querySelector('.progress-container');
-    if (progressContainer) {
-        progressContainer.remove();
-    }
-}
-
-function displayResponse(response) {
-    console.log('Displaying response:', response);
-    const resultContainer = document.createElement('div');
-    resultContainer.className = 'result-container';
-    
-    let content = response;
-    const isError = typeof response === 'string' && 
-                   (response.includes('error') || response.includes('失败'));
-    
-    if (typeof response === 'object') {
-        content = JSON.stringify(response, null, 2);
-    }
-    
-    resultContainer.innerHTML = `
-        <div class="result-content ${isError ? 'error' : ''}">${content}</div>
-        <button class="close-result">关闭</button>
-    `;
-    document.querySelector('.canvas-container').appendChild(resultContainer);
-
-    resultContainer.querySelector('.close-result').addEventListener('click', () => {
-        resultContainer.remove();
-    });
-}
-
-// 添加测试模式
-const TEST_MODE = false; // 设置为 true 启用测试模式
-
-async function uploadImage(formData) {
-    if (TEST_MODE) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return "```mermaid\ngraph TD\n    A[开始] --> B[处理]\n    B --> C[结束]\n```";
-    }
-    
-    try {
-        // 获取图像数据
-        const imageData = formData.get('file');
-        
-        // 发送消息给 background script
-        const response = await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({
-                type: 'uploadImage',
-                imageData: URL.createObjectURL(imageData)
-            }, response => {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                    return;
-                }
-                
-                if (response.success) {
-                    resolve(response.data);
-                } else {
-                    reject(new Error(response.error));
-                }
-            });
-        });
-
-        console.log('API Response:', response);
-        
-        if (!response.analysisResult) {
-            throw new Error('API 返回数据格式错误');
-        }
-
-        return response.analysisResult;
-    } catch (error) {
-        console.error('Upload Error:', error);
-        throw new Error(error.message || '上传失败');
-    }
-}
-
-function dataURLtoBlob(dataURL) {
-    const byteString = atob(dataURL.split(',')[1]);
-    const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-    }
-    return new Blob([ab], { type: mimeString });
-}
-
-// 在文件开头初始化 mermaid
-mermaid.initialize({
-    startOnLoad: false,
-    theme: 'default',
-    securityLevel: 'loose'
-});
-
-// 添加渲染 mermaid 图表的函数
-async function renderMermaidDiagram(mermaidCode) {
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
-    // 设置容器宽度与画布相同，确保生成的SVG大小合适
-    tempContainer.style.width = document.getElementById('drawingBoard').width + 'px';
-    document.body.appendChild(tempContainer);
-
-    try {
-        // 配置 mermaid 渲染选项
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'default',
-            securityLevel: 'loose',
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true,
-                curve: 'basis'
-            }
-        });
-
-        // 渲染 mermaid 图表
-        const { svg } = await mermaid.render('mermaid-diagram', mermaidCode);
-        
-        // 创建一个临时的 SVG 容器来调整 SVG 大小
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = svg;
-        const svgElement = tempDiv.querySelector('svg');
-        
-        // 获取画布尺寸
-        const canvas = document.getElementById('drawingBoard');
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        
-        // 设置 SVG 尺寸以适应画布
-        svgElement.setAttribute('width', canvasWidth);
-        svgElement.setAttribute('height', canvasHeight);
-        svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        
-        // 将调整后的 SVG 转换为字符串
-        const adjustedSvg = tempDiv.innerHTML;
-        
-        // 创建图片对象
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            // 使用调整后的 SVG
-            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(adjustedSvg)));
-        });
-
-        // 获取画布上下文
-        const ctx = canvas.getContext('2d');
-        
-        // 保存当前画布状态到撤销栈
-        const currentState = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
-        
-        // 清除画布
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        
-        // 计算绘制位置和尺寸
-        const aspectRatio = img.width / img.height;
-        let drawWidth = canvasWidth * 0.9;
-        let drawHeight = drawWidth / aspectRatio;
-        
-        // 如果高度超出画布，则按高度计算
-        if (drawHeight > canvasHeight * 0.9) {
-            drawHeight = canvasHeight * 0.9;
-            drawWidth = drawHeight * aspectRatio;
-        }
-        
-        // 计算居中位置
-        const x = (canvasWidth - drawWidth) / 2;
-        const y = (canvasHeight - drawHeight) / 2;
-        
-        // 绘制图表
-        ctx.drawImage(img, x, y, drawWidth, drawHeight);
-
-        // 将当前状态添加到撤销栈
-        const drawingBoard = document.querySelector('#drawingBoard').__drawingBoard;
-        if (drawingBoard) {
-            drawingBoard.undoStack.push(currentState);
-            drawingBoard.saveState();
-        }
-
-    } catch (error) {
-        console.error('Mermaid rendering failed:', error);
-        throw new Error('流程图渲染失败：' + error.message);
-    } finally {
-        // 清理临时容器
-        document.body.removeChild(tempContainer);
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const drawingBoard = new DrawingBoard();
+    window.drawingBoard = new DrawingBoard();
 }); 
