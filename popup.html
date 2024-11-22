@@ -18,6 +18,16 @@
                 <button id="eraser" class="icon-button" title="橡皮擦">
                     <span class="material-icons">auto_fix_normal</span>
                 </button>
+                <button id="text" class="icon-button" title="文本">
+                    <span class="material-icons">text_fields</span>
+                </button>
+                <button id="select" class="icon-button" title="选择">
+                    <span class="material-icons">near_me</span>
+                </button>
+                <label for="imageUpload" class="icon-button" title="上传图片">
+                    <span class="material-icons">image</span>
+                </label>
+                <input type="file" id="imageUpload" class="hidden" accept="image/*">
                 <div class="dropdown">
                     <button id="shape" class="icon-button" title="形状">
                         <span class="material-icons">category</span>
@@ -37,29 +47,22 @@
                         </div>
                     </div>
                 </div>
-                <button id="text" class="icon-button" title="文本">
-                    <span class="material-icons">text_fields</span>
-                </button>
-                <button id="select" class="icon-button" title="选择">
-                    <span class="material-icons">near_me</span>
-                </button>
                 <button id="undo" class="icon-button" title="撤销">
                     <span class="material-icons">undo</span>
                 </button>
-                <label for="imageUpload" class="icon-button" title="上传图片">
-                    <span class="material-icons">image</span>
-                </label>
-                <input type="file" id="imageUpload" class="hidden" accept="image/*">
                 <button id="aiRenderButton" class="icon-button" title="AI渲染">
                     <span class="material-icons">auto_awesome</span>
                 </button>
                 <div class="color-picker-wrapper">
                     <input type="color" id="colorPicker" value="#000000">
-                    <div class="color-preview"></div>
+                    <span class="material-icons">palette</span>
                 </div>
             </div>
             <div class="separator"></div>
             <div class="tool-group right-group">
+                <button id="help" class="icon-button" title="使用说明">
+                    <span class="material-icons">help_outline</span>
+                </button>
                 <button id="new" class="icon-button" title="新建画布">
                     <span class="material-icons">description</span>
                 </button>
@@ -84,5 +87,6 @@
     <script src="js/mermaid-init.js"></script>
     <script src="js/canvas.js"></script>
     <script src="js/mermaid-renderer.js"></script>
+    <script src="js/product-intro.js"></script>
 </body>
 </html> 
