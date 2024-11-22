@@ -249,8 +249,8 @@ body {
 }
 
 #confirmText {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: var(--gray-light);
+    color: inherit;
 }
 
 #confirmText:hover {
@@ -392,5 +392,17 @@ body {
 
 #select:hover + .canvas-container canvas {
     cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M12 2L2 22l10-6 10 6L12 2z"/></svg>') 0 0, auto !important;
+}
+
+.text-input-hidden {
+    display: none;
+}
+
+.text-area-no-resize {
+    resize: none;
+}
+
+.hidden {
+    display: none;
 }
  

@@ -49,7 +49,7 @@
                 <label for="imageUpload" class="icon-button" title="上传图片">
                     <span class="material-icons">image</span>
                 </label>
-                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                <input type="file" id="imageUpload" class="hidden" accept="image/*">
                 <button id="aiRenderButton" class="icon-button" title="AI渲染">
                     <span class="material-icons">auto_awesome</span>
                 </button>
@@ -69,10 +69,10 @@
             </div>
         </div>
         
-        <div class="canvas-container" style="width: 768px; height: 520px;">
+        <div class="canvas-container">
             <canvas id="drawingBoard"></canvas>
-            <div id="textInput" class="text-input" style="display: none;">
-                <textarea id="textContent" placeholder="请输入文本..." rows="4" style="resize: none;"></textarea>
+            <div id="textInput" class="text-input text-input-hidden">
+                <textarea id="textContent" placeholder="请输入文本..." class="text-area-no-resize"></textarea>
                 <div class="button-group">
                     <button id="confirmText" class="primary-button">确定</button>
                     <button id="cancelText">取消</button>
