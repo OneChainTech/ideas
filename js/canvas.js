@@ -44,6 +44,22 @@ function displayResponse(response) {
     });
 }
 
+async function renderMermaidDiagram(mermaidCode) {
+    // 创建一个新的 div 元素来渲染 mermaid 图表
+    const element = document.createElement('div');
+    element.className = 'mermaid';
+    element.innerHTML = mermaidCode;
+
+    // 将新元素添加到画布容器中
+    document.querySelector('.canvas-container').appendChild(element);
+
+    // 渲染 mermaid 图表
+    await mermaid.init();
+    mermaid.render('mermaidDiagram', mermaidCode, (svgCode) => {
+        element.innerHTML = svgCode;
+    });
+}
+
 class DrawingBoard {
     constructor() {
         this.mode = 'pen';
