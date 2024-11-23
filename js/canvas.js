@@ -73,7 +73,7 @@ async function renderMermaidDiagram(mermaidCode) {
             z-index: 1000;
         `;
 
-        // 创建关闭按钮
+        // 创建关闭按
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '关闭';
         closeButton.style.cssText = `
@@ -111,6 +111,15 @@ async function renderMermaidDiagram(mermaidCode) {
     }
 }
 
+// 添加防抖函数以限制 saveState 的调用频率
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
 class DrawingBoard {
     constructor() {
         this.mode = 'pen';
@@ -125,7 +134,9 @@ class DrawingBoard {
         this.startX = 0;
         this.startY = 0;
         this.currentShapeIcon = null;
+        this.isUndoing = false;
         
+        // 初始化 Fabric Canvas
         this.initializeFabricCanvas();
         this.setupEventListeners();
         this.loadState();
@@ -134,6 +145,19 @@ class DrawingBoard {
             version: "5.3.1",
             objects: [],
             background: "#FFFFFF"
+        });
+
+        // 确保初始状态被推送到撤销栈
+        if (this.undoStack.length === 0) {
+            this.undoStack.push(this.emptyState);
+            localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+        }
+
+        // 添加插件关闭时的缓存逻辑
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         });
     }
 
@@ -165,12 +189,18 @@ class DrawingBoard {
         this.fabricCanvas.selection = true;
         this.fabricCanvas.preserveObjectStacking = true;
 
-        this.fabricCanvas.on('object:added', () => {
-            this.saveState();
+        // 修改事件监听逻辑
+        this.fabricCanvas.on('object:added', (e) => {
+            // 仅在非撤销操作且非临时形状时保存状态
+            if (!this.isUndoing && !this.tempShape) {
+                this.saveState();
+            }
         });
-
-        this.fabricCanvas.on('object:modified', () => {
-            this.saveState();
+        
+        this.fabricCanvas.on('object:modified', (e) => {
+            if (!this.isUndoing) {
+                this.saveState();
+            }
         });
 
         this.fabricCanvas.on('mouse:down', (e) => this.onMouseDown(e));
@@ -368,6 +398,7 @@ class DrawingBoard {
 
         this.tempShape = this.createShape(this.currentShape, points);
         if (this.tempShape) {
+            // 添加临时形状但不触发状态保存
             this.fabricCanvas.add(this.tempShape);
             this.fabricCanvas.renderAll();
         }
@@ -378,6 +409,7 @@ class DrawingBoard {
             this.isDrawing = false;
             if (this.tempShape) {
                 this.tempShape.setCoords();
+                // 在这里手动触发状态保存
                 this.saveState();
                 this.tempShape = null;
             }
@@ -438,39 +470,54 @@ class DrawingBoard {
     }
 
     undo() {
-        if (this.undoStack.length > 1) {
+        if (this.undoStack.length <= 1) return; // 保留初始状态
+
+        try {
+            this.isUndoing = true;
+
+            // 当前状态保存到 redoStack
             const currentState = this.undoStack.pop();
-            if (currentState) {
-                this.redoStack.push(currentState);
-                const previousState = this.undoStack[this.undoStack.length - 1];
-                
-                if (previousState) {
-                    const stateObj = JSON.parse(previousState);
-                    this.fabricCanvas.loadFromJSON(stateObj, () => {
-                        this.fabricCanvas.renderAll();
-                        localStorage.setItem('drawingBoardState', previousState);
-                    });
-                }
-            }
+            this.redoStack.push(currentState);
+
+            // 获取上一个状态
+            const previousState = this.undoStack[this.undoStack.length - 1];
+
+            // 加载上一个状态
+            this.fabricCanvas.loadFromJSON(previousState, () => {
+                this.fabricCanvas.renderAll();
+                this.isUndoing = false;
+
+                // 更新 localStorage
+                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+            });
+        } catch (error) {
+            console.error('Undo error:', error);
+            this.isUndoing = false;
         }
     }
 
     redo() {
-        if (this.redoStack.length > 0) {
+        if (this.redoStack.length === 0) return;
+
+        try {
+            this.isUndoing = true;
+
             const nextState = this.redoStack.pop();
             this.undoStack.push(nextState);
 
-            try {
-                const stateObj = JSON.parse(nextState);
-                this.fabricCanvas.loadFromJSON(stateObj, () => {
-                    this.fabricCanvas.renderAll();
-                    localStorage.setItem('drawingBoardState', nextState);
-                });
-            } catch (error) {
-                console.error('Error during redo:', error);
-                this.undoStack.pop();
-                this.redoStack.push(nextState);
-            }
+            // 加载下一个状态
+            this.fabricCanvas.loadFromJSON(nextState, () => {
+                this.fabricCanvas.renderAll();
+                this.isUndoing = false;
+
+                // 更新 localStorage
+                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+            });
+        } catch (error) {
+            console.error('Redo error:', error);
+            this.isUndoing = false;
         }
     }
 
@@ -555,32 +602,30 @@ class DrawingBoard {
     }
 
     saveState() {
+        if (this.isUndoing) return;
+
         try {
             const currentState = this.fabricCanvas.toJSON(['selectable', 'evented']);
             const currentStateStr = JSON.stringify(currentState);
 
-            if (this.undoStack.length === 0) {
-                const emptyState = {
-                    version: "5.3.1",
-                    objects: [],
-                    background: "#FFFFFF"
-                };
-                this.undoStack.push(JSON.stringify(emptyState));
-            }
-
+            // 检查是否与最后一个状态相同
             const lastState = this.undoStack[this.undoStack.length - 1];
             if (lastState === currentStateStr) {
                 return;
             }
 
+            // 保存新状态
             this.undoStack.push(currentStateStr);
-            this.redoStack = [];
+            this.redoStack = []; // 清空重做栈
 
+            // 限制撤销栈大小
             if (this.undoStack.length > 50) {
                 this.undoStack.shift();
             }
 
-            localStorage.setItem('drawingBoardState', currentStateStr);
+            // 更新 localStorage
+            localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         } catch (error) {
             console.error('Error saving state:', error);
         }
@@ -588,24 +633,37 @@ class DrawingBoard {
 
     loadState() {
         try {
-            const savedState = localStorage.getItem('drawingBoardState');
-            if (savedState && savedState !== 'undefined') {
-                const stateObj = JSON.parse(savedState);
-                
-                this.fabricCanvas.loadFromJSON(stateObj, () => {
-                    this.fabricCanvas.renderAll();
-                    
-                    this.undoStack = [this.emptyState];
-                    if (savedState !== this.emptyState) {
-                        this.undoStack.push(savedState);
-                    }
-                    this.redoStack = [];
-                });
+            const savedUndoStack = localStorage.getItem('undoStack');
+            const savedRedoStack = localStorage.getItem('redoStack');
+
+            if (savedUndoStack) {
+                this.undoStack = JSON.parse(savedUndoStack);
             } else {
-                this.clearCanvas();
+                this.undoStack = [this.emptyState];
+                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            }
+
+            if (savedRedoStack) {
+                this.redoStack = JSON.parse(savedRedoStack);
+            } else {
+                this.redoStack = [];
+                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+            }
+
+            const currentState = this.undoStack[this.undoStack.length - 1] || this.emptyState;
+            const stateObj = JSON.parse(currentState);
+            
+            this.fabricCanvas.loadFromJSON(stateObj, () => {
+                this.fabricCanvas.renderAll();
+            });
+
+            // 如果 undoStack 为空，推送初始状态
+            if (this.undoStack.length === 0) {
+                this.undoStack.push(this.emptyState);
+                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
             }
         } catch (error) {
-            console.error('Error loading state:', error);
+            console.error('加载状态时出错:', error);
             this.clearCanvas();
         }
     }
@@ -618,7 +676,9 @@ class DrawingBoard {
             this.undoStack = [this.emptyState];
             this.redoStack = [];
             this.isFirstDraw = true;
-            localStorage.setItem('drawingBoardState', this.emptyState);
+            
+            localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         }
     }
 
