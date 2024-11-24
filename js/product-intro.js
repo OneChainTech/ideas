@@ -35,8 +35,12 @@ class ProductIntro {
             color: #333;
         `;
 
-        // 菜单功能介绍内容
+        // 添加产品说明标题和介绍
         content.innerHTML = `
+            <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">小黑板</h3>
+                <p style="margin: 0; color: #666; font-size: 14px;">一个简单易用的绘图工具，支持手绘、图形绘制和AI智能渲染功能。</p>
+            </div>
             <div style="display: flex; flex-direction: column;">
                 <div style="margin-bottom: 10px; color: #555;">
                     <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">edit</span>
