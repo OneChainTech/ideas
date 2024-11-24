@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "小黑板",
   "description": "创意画板工具，助您随时随地在浏览器中进行创作。支持图片标记、自由绘画、几何图形和文字标注，快速捕捉灵感。全新 AI 渲染功能，智能识别手绘草图并生成标准流程图，提升您的工作效率和创意表达能力。",
-  "version": "1.3",
+  "version": "1.4",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
