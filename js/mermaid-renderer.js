@@ -2,6 +2,9 @@ class MermaidRenderer {
     constructor() {
         this.canvasContainer = document.querySelector('.canvas-container');
         this.drawingBoard = document.getElementById('drawingBoard');
+        this.isRendering = false;
+        this.loadingIndicator = null;
+        this.selectedElement = null;
     }
 
     createRenderContainer() {
@@ -120,7 +123,61 @@ class MermaidRenderer {
         return button;
     }
 
+    showLoadingIndicator() {
+        if (this.loadingIndicator) return;
+
+        this.loadingIndicator = document.createElement('div');
+        this.loadingIndicator.className = 'loading-indicator';
+        this.loadingIndicator.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        spinner.style.cssText = `
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s linear infinite;
+        `;
+
+        this.loadingIndicator.appendChild(spinner);
+        this.canvasContainer.appendChild(this.loadingIndicator);
+
+        const style = document.createElement('style');
+        style.type = 'text/css';
+        style.innerHTML = `
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    hideLoadingIndicator() {
+        if (this.loadingIndicator) {
+            this.loadingIndicator.remove();
+            this.loadingIndicator = null;
+        }
+    }
+
     async showRenderer(mermaidCode) {
+        if (this.isRendering) {
+            return;
+        }
+        this.isRendering = true;
+        document.getElementById('aiRenderButton').disabled = true;
+        this.showLoadingIndicator();
+
         try {
             this.hideRenderer();
 
@@ -152,9 +209,30 @@ class MermaidRenderer {
                 `;
             }
 
+            svgElement.querySelectorAll('*').forEach((elem) => {
+                elem.style.cursor = 'pointer';
+                elem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectedElement = elem;
+                    this.showControlPanel(elem);
+                });
+            });
+
+            container.addEventListener('click', () => {
+                this.selectedElement = null;
+                const panel = document.getElementById('control-panel');
+                if (panel) {
+                    panel.remove();
+                }
+            });
+
         } catch (error) {
             console.error('Mermaid rendering error:', error);
             this.showError('渲染失败: ' + error.message);
+        } finally {
+            this.isRendering = false;
+            document.getElementById('aiRenderButton').disabled = false;
+            this.hideLoadingIndicator();
         }
     }
 
@@ -199,6 +277,79 @@ class MermaidRenderer {
         if (existingContainer) {
             existingContainer.remove();
         }
+    }
+
+    showControlPanel(element) {
+        let existingPanel = document.getElementById('control-panel');
+        if (existingPanel) {
+            existingPanel.remove();
+        }
+
+        const panel = document.createElement('div');
+        panel.id = 'control-panel';
+        panel.style.cssText = `
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1002;
+            width: 200px;
+        `;
+
+        const colorLabel = document.createElement('label');
+        colorLabel.textContent = '颜色: ';
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = element.getAttribute('fill') || '#000000';
+        colorInput.addEventListener('input', (e) => {
+            if (this.selectedElement) {
+                this.selectedElement.setAttribute('fill', e.target.value);
+            }
+        });
+        colorLabel.appendChild(colorInput);
+        panel.appendChild(colorLabel);
+
+        const sizeLabel = document.createElement('label');
+        sizeLabel.textContent = '大小: ';
+        const sizeInput = document.createElement('input');
+        sizeInput.type = 'number';
+        sizeInput.min = '10';
+        sizeInput.max = '500';
+        sizeInput.value = element.getAttribute('width') || '100';
+        sizeInput.style.width = '60px';
+        sizeInput.addEventListener('input', (e) => {
+            if (this.selectedElement) {
+                this.selectedElement.setAttribute('width', e.target.value);
+                this.selectedElement.setAttribute('height', e.target.value);
+            }
+        });
+        sizeLabel.appendChild(sizeInput);
+        panel.appendChild(sizeLabel);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '删除';
+        deleteButton.style.marginTop = '10px';
+        deleteButton.style.width = '100%';
+        deleteButton.style.padding = '5px';
+        deleteButton.style.backgroundColor = '#dc3545';
+        deleteButton.style.color = '#fff';
+        deleteButton.style.border = 'none';
+        deleteButton.style.borderRadius = '4px';
+        deleteButton.style.cursor = 'pointer';
+        deleteButton.addEventListener('click', () => {
+            if (this.selectedElement) {
+                this.selectedElement.remove();
+                this.selectedElement = null;
+                panel.remove();
+            }
+        });
+        panel.appendChild(deleteButton);
+
+        this.canvasContainer.appendChild(panel);
     }
 }
 
