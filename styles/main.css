@@ -23,116 +23,32 @@ body {
     font-family: 'Segoe UI', Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    align-items: center;
     width: 800px;
     height: 600px;
     overflow: hidden;
-    background-color: var(--gray-light);
+    background-color: #fff;
 }
 
 .wrapper {
     position: relative;
-    width: 100%;
+    width: 800px;
     height: 100%;
     display: flex;
     flex-direction: column;
-}
-
-.toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    width: 100%;
-    padding: 8px 16px;
-    background-color: white;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.tool-group {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
-
-.right-group {
-    gap: 8px;
-}
-
-.icon-button {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-    color: #666;
-}
-
-.icon-button:hover {
-    background-color: var(--gray-light);
-    color: #333;
-}
-
-.icon-button.active {
-    color: var(--primary-color);
-    background-color: var(--primary-light);
-}
-
-.separator {
-    width: 1px;
-    height: 24px;
-    background-color: var(--border-color);
-    margin: 0 8px;
-}
-
-.material-icons {
-    font-size: 20px;
-}
-
-.color-picker-wrapper {
-    position: relative;
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-#colorPicker {
-    position: absolute;
-    width: 24px;
-    height: 24px;
+    overflow: hidden;
     padding: 0;
-    border: none;
-    opacity: 0;
-    cursor: pointer;
-}
-
-.color-preview {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--border-color);
-    border-radius: 4px;
-    pointer-events: none;
-    background-color: black;
 }
 
 .canvas-container {
     position: relative;
-    width: 768px;
-    height: 520px;
-    margin: 0 auto;
+    width: 800px;
+    height: 100%;
+    margin: 0;
+    padding: 0;
     background: #fff;
-    border: 1px solid #ddd;
+    border: none;
+    box-sizing: border-box;
+    flex-grow: 1;
 }
 
 .canvas-container canvas {
@@ -151,24 +67,26 @@ body {
 .dropdown-content {
     display: none;
     position: absolute;
-    top: 100%;
-    left: -4px;
+    top: 0;
+    right: 100%;
+    left: auto;
+    margin-top: 0;
+    margin-right: 4px;
     background-color: white;
     min-width: 160px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     border-radius: 4px;
     z-index: 1;
-    margin-top: 4px;
     padding: 4px 0;
 }
 
 .dropdown::after {
     content: '';
     position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100%;
-    height: 20px;
+    top: 0;
+    right: 100%;
+    width: 20px;
+    height: 100%;
 }
 
 .dropdown:hover .dropdown-content {
@@ -449,5 +367,164 @@ body {
     border-radius: 50%;
     border-left-color: #09f;
     animation: spin 1s linear infinite;
+}
+
+/* 添加悬浮工具栏相关样式 */
+.toolbar-hidden {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 添加切换按钮样式 */
+.toggle-toolbar-button {
+    position: fixed;
+    right: 10px;
+    top: 10px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.toggle-toolbar-button:hover {
+    background-color: rgba(255, 255, 255, 0.95);
+}
+
+.toggle-toolbar-button .material-icons {
+    font-size: 20px;
+    color: #666;
+}
+
+/* 当工具栏隐藏时，切换按钮的悬停效果 */
+.toolbar-hidden + .toggle-toolbar-button:hover {
+    background-color: var(--primary-light);
+}
+
+/* 修改工具栏样式为垂直布局 */
+.toolbar {
+    position: fixed;
+    top: 52px;
+    right: 10px;
+    transform: none;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+/* 修改工具组为垂直布局 */
+.tool-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+/* 图标按钮样式 */
+.icon-button {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: #666;
+}
+
+.icon-button:hover {
+    background-color: var(--gray-light);
+    color: #333;
+}
+
+.icon-button.active {
+    color: var(--primary-color);
+    background-color: var(--primary-light);
+}
+
+/* 颜色选择器包装器样式 */
+.color-picker-wrapper {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#colorPicker {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* 图标大小 */
+.material-icons {
+    font-size: 18px;
+}
+
+/* AI渲染按钮特殊样式 */
+#aiRenderButton {
+    color: var(--highlight-color);
+}
+
+#aiRenderButton:hover {
+    background-color: var(--gray-light);
+}
+
+/* 添加产品介绍相关样式 */
+.product-intro-tooltip {
+    position: absolute;
+    background: white;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    max-width: 300px;
+    z-index: 1000;
+}
+
+.product-intro-tooltip button {
+    margin: 0 5px;
+    padding: 5px 15px;
+    border: none;
+    border-radius: 3px;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.product-intro-tooltip button:hover {
+    background: var(--primary-dark);
+}
+
+.product-intro-tooltip .prev-btn {
+    background-color: var(--gray-light);
+    color: #666;
+}
+
+.product-intro-tooltip .prev-btn:hover {
+    background-color: var(--border-color);
 }
  

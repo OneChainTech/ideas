@@ -10,6 +10,10 @@
 </head>
 <body>
     <div class="wrapper">
+        <button id="toggleToolbar" class="toggle-toolbar-button" title="显示/隐藏工具栏">
+            <span class="material-icons">menu</span>
+        </button>
+        
         <div class="toolbar">
             <div class="tool-group">
                 <button id="pen" class="icon-button active" title="画笔">
@@ -57,17 +61,14 @@
                     <input type="color" id="colorPicker" value="#000000">
                     <span class="material-icons">palette</span>
                 </div>
-            </div>
-            <div class="separator"></div>
-            <div class="tool-group right-group">
-                <button id="help" class="icon-button" title="使用说明">
-                    <span class="material-icons">help_outline</span>
-                </button>
                 <button id="new" class="icon-button" title="新建画布">
                     <span class="material-icons">description</span>
                 </button>
                 <button id="save" class="icon-button" title="保存">
                     <span class="material-icons">save</span>
+                </button>
+                <button id="help" class="icon-button" title="使用说明">
+                    <span class="material-icons">help_outline</span>
                 </button>
             </div>
         </div>
@@ -88,5 +89,6 @@
     <script src="js/canvas.js"></script>
     <script src="js/mermaid-renderer.js"></script>
     <script src="js/product-intro.js"></script>
+    <script src="js/toolbar-controller.js"></script>
 </body>
 </html> 
