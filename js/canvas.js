@@ -423,7 +423,8 @@ class DrawingBoard {
             strokeWidth: 2,
             fill: 'transparent',
             selectable: false,
-            evented: false
+            evented: false,
+            strokeUniform: true
         };
 
         switch(type) {
@@ -463,7 +464,10 @@ class DrawingBoard {
                     points.endY - headLength * Math.sin(angle + Math.PI/6)
                 );
                 
-                shape = new fabric.Path(path.join(' '), options);
+                shape = new fabric.Path(path.join(' '), {
+                    ...options,
+                    strokeUniform: true
+                });
                 break;
         }
         return shape;
@@ -696,7 +700,8 @@ class DrawingBoard {
                     stroke: this.colorPicker.value,
                     strokeWidth: 2,
                     selectable: false,
-                    evented: false
+                    evented: false,
+                    strokeUniform: true
                 });
                 break;
             case 'circle':
@@ -709,7 +714,8 @@ class DrawingBoard {
                     stroke: this.colorPicker.value,
                     strokeWidth: 2,
                     selectable: false,
-                    evented: false
+                    evented: false,
+                    strokeUniform: true
                 });
                 break;
             case 'arrow':
@@ -722,7 +728,8 @@ class DrawingBoard {
                     stroke: this.colorPicker.value,
                     strokeWidth: 2,
                     selectable: false,
-                    evented: false
+                    evented: false,
+                    strokeUniform: true
                 });
                 break;
         }
@@ -832,10 +839,15 @@ class DrawingBoard {
             });
 
             activeObject.setControlsVisibility({
-                mt: false,
-                mb: false,
-                ml: false,
-                mr: false
+                mt: true,
+                mb: true,
+                ml: true,
+                mr: true,
+                bl: true,
+                br: true,
+                tl: true,
+                tr: true,
+                mtr: true
             });
 
             this.fabricCanvas.renderAll();
