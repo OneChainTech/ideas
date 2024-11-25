@@ -372,9 +372,9 @@ body {
     animation: spin 1s linear infinite;
 }
 
-/* 添加悬浮工具栏相关样式 */
+/* 添加悬��工具栏相关样式 */
 .toolbar-hidden {
-    transform: translateX(100%);
+    transform: translateY(-100%);
     opacity: 0;
     pointer-events: none;
 }
@@ -384,10 +384,10 @@ body {
     position: fixed;
     right: 10px;
     top: 10px;
-    width: 32px;
+    width: 48px;
     height: 32px;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px 8px 0 0;
     background-color: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(8px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -416,13 +416,14 @@ body {
 /* 修改工具栏样式为垂直布局 */
 .toolbar {
     position: fixed;
-    top: 52px;
+    top: 42px;
     right: 10px;
+    width: 48px;
     transform: none;
-    padding: 8px;
+    padding: 8px 0;
     background-color: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(8px);
-    border-radius: 8px;
+    border-radius: 0 0 8px 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     z-index: 1000;
     transition: all 0.3s ease;
