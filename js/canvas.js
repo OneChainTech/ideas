@@ -773,7 +773,12 @@ class DrawingBoard {
                     img.scale(scale);
                 }
                 
-                img.center();
+                img.set({
+                    originX: 'center', // 设置水平中心点
+                    originY: 'center', // 设置垂直中心点
+                    left: this.fabricCanvas.width / 2, // 设置水平位置为画布中心
+                    top: this.fabricCanvas.height / 2, // 设置垂直位置为画布中心
+                });
                 
                 this.fabricCanvas.add(img);
                 this.fabricCanvas.renderAll();

@@ -36,7 +36,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         handleImageUpload(message.imageData)
             .then(response => {
-                console.log('API 返回数据:', response);
+                // console.log('API 返回数据:', response);
                 sendResponse({ success: true, data: response });
             })
             .catch(error => {
@@ -52,8 +52,11 @@ async function handleImageUpload(imageData) {
         const response = await fetch(imageData);
         const blob = await response.blob();
         
+        // 新增：压缩图片
+        const compressedBlob = await compressImage(blob);
+        
         const formData = new FormData();
-        formData.append('file', blob, 'drawing.png');
+        formData.append('file', compressedBlob, 'drawing_compressed.png');
 
         console.log('准备发送到服务器...');
         
@@ -67,11 +70,30 @@ async function handleImageUpload(imageData) {
         }
 
         const result = await apiResponse.json();
-        console.log('服务器返回数据:', result);
+        // console.log('服务器返回数据:', result);
         
         return result;
     } catch (error) {
         console.error('API Error:', error);
         throw new Error('图片处理失败: ' + error.message);
+    }
+} 
+
+// 新增：压缩图片的函数
+async function compressImage(blob) {
+    try {
+        const imageBitmap = await createImageBitmap(blob);
+        const MAX_WIDTH = 800; // 设定最大宽度
+        const scaleSize = MAX_WIDTH / imageBitmap.width;
+        const canvas = new OffscreenCanvas(MAX_WIDTH, imageBitmap.height * scaleSize);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
+        
+        // 将 canvas 转换为新的 Blob
+        const compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.1 });
+        return compressedBlob;
+    } catch (error) {
+        console.error('压缩图片失败:', error);
+        throw new Error('压缩图片失败: ' + error.message);
     }
 } 
