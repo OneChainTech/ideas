@@ -84,13 +84,13 @@ async function compressImage(blob) {
     try {
         const imageBitmap = await createImageBitmap(blob);
         const MAX_WIDTH = 800; // 设定最大宽度
-        const scaleSize = MAX_WIDTH / imageBitmap.width;
-        const canvas = new OffscreenCanvas(MAX_WIDTH, imageBitmap.height * scaleSize);
+        const scaleSize = Math.min(MAX_WIDTH / imageBitmap.width, 1); // 确保不放大图片
+        const canvas = new OffscreenCanvas(Math.round(imageBitmap.width * scaleSize), Math.round(imageBitmap.height * scaleSize));
         const ctx = canvas.getContext('2d');
         ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
         
-        // 将 canvas 转换为新的 Blob
-        const compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.1 });
+        // 提高压缩质量以平衡速度和图片质量
+        const compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
         return compressedBlob;
     } catch (error) {
         console.error('压缩图片失败:', error);
