@@ -75,36 +75,96 @@ class TextRecognitionHandler {
                     .replace(/```markdown\n/g, '')
                     .replace(/```/g, '')
                     .trim();
-                
-                this.canvas.clear();
-                this.canvas.setBackgroundColor('#FFFFFF', this.canvas.renderAll.bind(this.canvas));
-                
-                const text = new fabric.Textbox(cleanText, {
-                    left: 50,
-                    top: 50,
-                    fontSize: 14,
-                    fill: '#000000',
-                    fontFamily: 'Arial',
-                    width: this.canvas.width - 100,
-                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                    breakWords: true,
-                    lockUniScaling: true,
-                    padding: 10
+
+                // 创建结果容器
+                const resultContainer = document.createElement('div');
+                resultContainer.className = 'result-container';
+                resultContainer.innerHTML = `
+                    <div class="result-content">${cleanText}</div>
+                    <div class="button-group">
+                        <button class="download-result">下载</button>
+                        <button class="close-result">关闭</button>
+                    </div>
+                `;
+
+                // 添加样式，使其与画布大小一致
+                resultContainer.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 800px;
+                    height: 600px;
+                    background: white;
+                    z-index: 1000;
+                    display: flex;
+                    flex-direction: column;
+                `;
+
+                // 添加内容区域样式
+                const resultContent = resultContainer.querySelector('.result-content');
+                resultContent.style.cssText = `
+                    flex: 1;
+                    padding: 20px;
+                    overflow: auto;
+                    white-space: pre-wrap;
+                    font-size: 14px;
+                    line-height: 1.5;
+                `;
+
+                // 添加按钮组样式
+                const buttonGroup = resultContainer.querySelector('.button-group');
+                buttonGroup.style.cssText = `
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 10px;
+                    padding: 10px 20px;
+                    background: #f5f5f5;
+                    border-top: 1px solid #e0e0e0;
+                `;
+
+                // 添加按钮样式
+                const buttons = resultContainer.querySelectorAll('button');
+                buttons.forEach(button => {
+                    button.style.cssText = `
+                        padding: 6px 16px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        transition: all 0.2s;
+                    `;
                 });
-                
-                // 计算文本高度
-                const textHeight = text.calcTextHeight();
-                text.set({
-                    height: textHeight + 20
+
+                const downloadButton = resultContainer.querySelector('.download-result');
+                downloadButton.style.cssText += `
+                    background-color: #4CAF50;
+                    color: white;
+                `;
+
+                const closeButton = resultContainer.querySelector('.close-result');
+                closeButton.style.cssText += `
+                    background-color: #f5f5f5;
+                    color: #333;
+                `;
+
+                // 添加按钮事件
+                downloadButton.addEventListener('click', () => {
+                    const blob = new Blob([cleanText], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `text-recognition-${new Date().toISOString().slice(0,10)}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
                 });
-                
-                this.canvas.add(text);
-                this.canvas.renderAll();
-                this.canvas.setActiveObject(text);
-                
-                if (window.drawingBoard) {
-                    window.drawingBoard.saveState();
-                }
+
+                closeButton.addEventListener('click', () => {
+                    resultContainer.remove();
+                });
+
+                document.querySelector('.canvas-container').appendChild(resultContainer);
             } else {
                 throw new Error('未能识别出文本内容');
             }
