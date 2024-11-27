@@ -504,7 +504,7 @@ body {
     font-size: 18px;
 }
 
-/* AI渲染按钮特殊样式 */
+/* 图片渲染按钮特殊样式 */
 #aiRenderButton {
     color: var(--highlight-color);
 }
@@ -546,5 +546,14 @@ body {
 
 .product-intro-tooltip .prev-btn:hover {
     background-color: var(--border-color);
+}
+
+/* 在 main.css 中添加文本识别按钮的样式 */
+#textRecognition {
+    color: var(--highlight-color);
+}
+
+#textRecognition:hover {
+    background-color: var(--gray-light);
 }
  

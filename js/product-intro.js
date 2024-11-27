@@ -1,5 +1,71 @@
 class ProductIntro {
     constructor() {
+        this.steps = [
+            {
+                element: '#pen',
+                title: '画笔工具',
+                content: '使用画笔工具在画布上自由绘画。'
+            },
+            {
+                element: '#eraser',
+                title: '橡皮擦工具',
+                content: '使用橡皮擦清除画布上的内容。'
+            },
+            {
+                element: '#text',
+                title: '文本工具',
+                content: '点击画布添加文本内容。'
+            },
+            {
+                element: '#select',
+                title: '选择工具',
+                content: '选择并移动画布上的元素。'
+            },
+            {
+                element: 'label[for="imageUpload"]',
+                title: '上传图片',
+                content: '从本地上传图片到画布。'
+            },
+            {
+                element: '#shape',
+                title: '形状工具',
+                content: '在画布上添加各种形状，包括方形、圆形和箭头。'
+            },
+            {
+                element: '#undo',
+                title: '撤销',
+                content: '撤销上一步操作。'
+            },
+            {
+                element: '#aiRenderButton',
+                title: '图片渲染',
+                content: '将手绘流程图渲染成规范的流程图，让您的图表更加专业。'
+            },
+            {
+                element: '#textRecognition',
+                title: '文本识别',
+                content: '识别画布中的手写文字，自动转换为可编辑的文本内容。'
+            },
+            {
+                element: '.color-picker-wrapper',
+                title: '颜色选择器',
+                content: '选择画笔和形状的颜色。'
+            },
+            {
+                element: '#new',
+                title: '新建画布',
+                content: '清空当前画布，开始新的创作。'
+            },
+            {
+                element: '#save',
+                title: '保存',
+                content: '将画布内容保存为图片。'
+            }
+        ];
+        
+        this.currentStep = 0;
+        this.tooltip = null;
+        
         this.setupEventListeners();
     }
 
@@ -35,11 +101,11 @@ class ProductIntro {
             color: #333;
         `;
 
-        // 添加产品说明标题和介绍
+        // 更新产品说明内容，包括图片渲染和文本识别
         content.innerHTML = `
             <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
                 <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">小黑板</h3>
-                <p style="margin: 0; color: #666; font-size: 14px;">一个简单易用的绘图工具，支持手绘、图形绘制和AI智能渲染功能。</p>
+                <p style="margin: 0; color: #666; font-size: 14px;">一个简单易用的绘图工具，支持手绘、图形绘制、图片渲染和文本识别功能。</p>
             </div>
             <div style="display: flex; flex-direction: column;">
                 <div style="margin-bottom: 10px; color: #555;">
@@ -72,7 +138,11 @@ class ProductIntro {
                 </div>
                 <div style="margin-bottom: 10px; color: #555;">
                     <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">auto_awesome</span>
-                    AI 渲染：将手绘图形转换为标准流程图
+                    图片渲染：将手绘图形转换为标准流程图
+                </div>
+                <div style="margin-bottom: 10px; color: #555;">
+                    <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">document_scanner</span>
+                    文本识别：识别画布中的手写文字，转换为可编辑文本
                 </div>
                 <div style="margin-bottom: 10px; color: #555;">
                     <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">palette</span>

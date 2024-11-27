@@ -76,79 +76,85 @@ class TextRecognitionHandler {
                     .replace(/```/g, '')
                     .trim();
 
-                // 创建结果容器
-                const resultContainer = document.createElement('div');
-                resultContainer.className = 'result-container';
-                resultContainer.innerHTML = `
-                    <div class="result-content">${cleanText}</div>
-                    <div class="button-group">
-                        <button class="download-result">下载</button>
-                        <button class="close-result">关闭</button>
-                    </div>
-                `;
+                // 移除已存在的容器
+                const existingContainer = document.querySelector('.mermaid-canvas-container');
+                if (existingContainer) {
+                    existingContainer.remove();
+                }
 
-                // 添加样式，使其与画布大小一致
-                resultContainer.style.cssText = `
+                // 创建容器
+                const container = document.createElement('div');
+                container.className = 'mermaid-canvas-container';  // 使用相同的类名
+                container.style.cssText = `
                     position: absolute;
                     top: 0;
                     left: 0;
-                    width: 800px;
-                    height: 600px;
-                    background: white;
-                    z-index: 1000;
+                    right: 0;
+                    bottom: 0;
+                    background: #ffffff;
                     display: flex;
                     flex-direction: column;
+                    z-index: 1000;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
                 `;
 
-                // 添加内容区域样式
-                const resultContent = resultContainer.querySelector('.result-content');
-                resultContent.style.cssText = `
+                // 创建内容区域
+                const content = document.createElement('div');
+                content.className = 'mermaid-content';  // 使用相同的类名
+                content.style.cssText = `
                     flex: 1;
+                    padding: 24px;
+                    overflow: auto;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    background: #ffffff;
+                    border-radius: 4px;
+                    position: relative;
+                `;
+
+                // 创建内容容器
+                const contentInner = document.createElement('div');
+                contentInner.style.cssText = `
+                    background: #ffffff;
+                    border-radius: 4px;
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    justify-content: center;
+                    align-items: flex-start;  // 改为顶部对齐
                     padding: 20px;
                     overflow: auto;
+                `;
+
+                // 创建文本容器
+                const textContent = document.createElement('div');
+                textContent.style.cssText = `
                     white-space: pre-wrap;
                     font-size: 14px;
-                    line-height: 1.5;
-                `;
-
-                // 添加按钮组样式
-                const buttonGroup = resultContainer.querySelector('.button-group');
-                buttonGroup.style.cssText = `
-                    display: flex;
-                    justify-content: flex-end;
-                    gap: 10px;
-                    padding: 10px 20px;
-                    background: #f5f5f5;
-                    border-top: 1px solid #e0e0e0;
-                `;
-
-                // 添加按钮样式
-                const buttons = resultContainer.querySelectorAll('button');
-                buttons.forEach(button => {
-                    button.style.cssText = `
-                        padding: 6px 16px;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        transition: all 0.2s;
-                    `;
-                });
-
-                const downloadButton = resultContainer.querySelector('.download-result');
-                downloadButton.style.cssText += `
-                    background-color: #4CAF50;
-                    color: white;
-                `;
-
-                const closeButton = resultContainer.querySelector('.close-result');
-                closeButton.style.cssText += `
-                    background-color: #f5f5f5;
+                    line-height: 1.6;
                     color: #333;
+                    width: 100%;
+                `;
+                textContent.textContent = cleanText;
+                contentInner.appendChild(textContent);
+
+                // 创建按钮容器
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.cssText = `
+                    position: absolute;
+                    bottom: 16px;
+                    right: 16px;
+                    display: flex;
+                    gap: 8px;
+                    z-index: 1001;
                 `;
 
-                // 添加按钮事件
-                downloadButton.addEventListener('click', () => {
+                // 创建下载按钮
+                const downloadButton = this.createIconButton('download');
+                downloadButton.title = '下载';
+                downloadButton.onclick = () => {
                     const blob = new Blob([cleanText], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -158,13 +164,22 @@ class TextRecognitionHandler {
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                });
+                };
 
-                closeButton.addEventListener('click', () => {
-                    resultContainer.remove();
-                });
+                // 创建关闭按钮
+                const closeButton = this.createIconButton('close');
+                closeButton.title = '关闭';
+                closeButton.onclick = () => container.remove();
 
-                document.querySelector('.canvas-container').appendChild(resultContainer);
+                // 组装 DOM
+                buttonContainer.appendChild(downloadButton);
+                buttonContainer.appendChild(closeButton);
+                content.appendChild(contentInner);
+                content.appendChild(buttonContainer);
+                container.appendChild(content);
+
+                // 添加到画布容器
+                document.querySelector('.canvas-container').appendChild(container);
             } else {
                 throw new Error('未能识别出文本内容');
             }
@@ -204,5 +219,48 @@ class TextRecognitionHandler {
             this.hideProgressBar(progressContainer);
             textRecognitionBtn.disabled = false;
         }
+    }
+
+    // 添加创建按钮的辅助方法
+    createIconButton(icon) {
+        const button = document.createElement('button');
+        button.className = 'icon-button';
+        button.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        `;
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'material-icons';
+        iconSpan.style.cssText = `
+            font-size: 20px;
+        `;
+        iconSpan.textContent = icon;
+
+        button.appendChild(iconSpan);
+
+        button.addEventListener('mouseover', () => {
+            button.style.background = '#f0f0f0';
+            button.style.color = '#333';
+            button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+        });
+
+        button.addEventListener('mouseout', () => {
+            button.style.background = 'rgba(255, 255, 255, 0.9)';
+            button.style.color = '#666';
+            button.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+        });
+
+        return button;
     }
 } 
