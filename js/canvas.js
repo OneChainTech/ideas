@@ -1,6 +1,13 @@
 function showProgressBar() {
     const progressContainer = document.createElement('div');
     progressContainer.className = 'progress-container';
+    progressContainer.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+    `;
     progressContainer.innerHTML = `
         <div class="progress-bar">
             <div class="progress-fill"></div>
@@ -159,6 +166,8 @@ class DrawingBoard {
             localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
             localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         });
+
+        const textRecognitionHandler = new TextRecognitionHandler(this.fabricCanvas);
     }
 
     initializeFabricCanvas() {
