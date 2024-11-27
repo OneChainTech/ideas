@@ -35,6 +35,34 @@ class TextRecognitionHandler {
         }
     }
 
+    // 添加图片压缩方法
+    async compressImage(dataUrl, maxWidth = 1600) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.src = dataUrl;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 如果图片宽度超过最大宽度，按比例缩放
+                if (width > maxWidth) {
+                    height = Math.floor(height * (maxWidth / width));
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 压缩为 JPEG 格式，质量 0.8
+                resolve(canvas.toDataURL('image/jpeg', 0.5));
+            };
+        });
+    }
+
     async handleTextRecognition() {
         const textRecognitionBtn = document.getElementById('textRecognition');
         textRecognitionBtn.disabled = true;
@@ -42,11 +70,13 @@ class TextRecognitionHandler {
         const progressContainer = this.showProgressBar();
 
         try {
-            const dataUrl = this.canvas.toDataURL('image/png');
-            const blob = await (await fetch(dataUrl)).blob();
+            // 获取画布图片并压缩
+            const originalDataUrl = this.canvas.toDataURL('image/png');
+            const compressedDataUrl = await this.compressImage(originalDataUrl);
+            const blob = await (await fetch(compressedDataUrl)).blob();
             
             const formData = new FormData();
-            formData.append('file', blob, 'canvas-image.png');
+            formData.append('file', blob, 'canvas-image.jpg');
 
             console.log('发送请求到服务器...');
             const response = await fetch('https://ideasai.onrender.com/uploadMd', {
