@@ -121,7 +121,7 @@ class ProductIntro {
                     文本工具：在画布上添加文字说明
                 </div>
                 <div style="margin-bottom: 10px; color: #555;">
-                    <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">near_me</span>
+                    <span class="material-icons" style="font-size: 19px; vertical-align: middle; margin-right: 10px; color: #666;">back_hand</span>
                     选择工具：选择和移动画布中的元素
                 </div>
                 <div style="margin-bottom: 10px; color: #555;">
