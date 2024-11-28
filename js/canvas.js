@@ -157,7 +157,7 @@ class DrawingBoard {
             background: "#FFFFFF"
         });
 
-        // 清理可能存在的无效状态
+        // 清理可能存在的无状态
         this.cleanInvalidStates();
         
         // 初始化 Fabric Canvas
@@ -169,10 +169,9 @@ class DrawingBoard {
         // 设置事件监听
         this.setupEventListeners();
 
-        // 添加插件关闭时的缓存逻辑
+        // 修改插件关闭时的缓存逻辑
         window.addEventListener('beforeunload', () => {
             localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         });
 
         const textRecognitionHandler = new TextRecognitionHandler(this.fabricCanvas);
@@ -182,15 +181,14 @@ class DrawingBoard {
     cleanInvalidStates() {
         try {
             const undoStack = localStorage.getItem('undoStack');
-            const redoStack = localStorage.getItem('redoStack');
             
+            // 只检查 undoStack
             if (!undoStack || !this.isValidJsonArray(undoStack)) {
                 localStorage.removeItem('undoStack');
             }
             
-            if (!redoStack || !this.isValidJsonArray(redoStack)) {
-                localStorage.removeItem('redoStack');
-            }
+            // 确保删除任何可能存在的 redoStack
+            localStorage.removeItem('redoStack');
         } catch (error) {
             console.warn('清理无效状态时出错:', error);
             localStorage.removeItem('undoStack');
@@ -230,6 +228,7 @@ class DrawingBoard {
         try {
             const savedUndoStack = localStorage.getItem('undoStack');
             
+            // 初始化撤销栈
             if (savedUndoStack) {
                 try {
                     const parsedStack = JSON.parse(savedUndoStack);
@@ -239,7 +238,7 @@ class DrawingBoard {
                         throw new Error('Undo stack is not an array');
                     }
 
-                    // 过滤掉无效的态
+                    // 过滤掉无效的状态
                     const validStates = parsedStack.filter(state => this.isValidStateObject(state));
 
                     if (validStates.length === 0) {
@@ -247,7 +246,17 @@ class DrawingBoard {
                     }
 
                     this.undoStack = validStates;
-                    this.loadLatestState();
+                    
+                    // 标记正在初始化
+                    this.isInitializing = true;
+                    
+                    // 加载最后一个有效状态
+                    const lastState = JSON.parse(this.undoStack[this.undoStack.length - 1]);
+                    this.fabricCanvas.loadFromJSON(lastState, () => {
+                        this.fabricCanvas.renderAll();
+                        // 初始化完成
+                        this.isInitializing = false;
+                    });
                 } catch (e) {
                     console.warn('存储的状态无效，重置为初始状态:', e);
                     this.resetToEmptyState();
@@ -256,24 +265,9 @@ class DrawingBoard {
                 this.resetToEmptyState();
             }
 
-            // 初始化重做栈
-            const savedRedoStack = localStorage.getItem('redoStack');
-            if (savedRedoStack) {
-                try {
-                    const parsedRedoStack = JSON.parse(savedRedoStack);
-                    if (Array.isArray(parsedRedoStack)) {
-                        // 过滤掉无效的状态
-                        this.redoStack = parsedRedoStack.filter(state => this.isValidStateObject(state));
-                    } else {
-                        this.redoStack = [];
-                    }
-                } catch {
-                    this.redoStack = [];
-                }
-            } else {
-                this.redoStack = [];
-            }
-
+            // 始终初始化一个空的重做栈
+            this.redoStack = [];
+            
             // 确保撤销栈至少包含空状态
             if (this.undoStack.length === 0) {
                 this.resetToEmptyState();
@@ -308,18 +302,19 @@ class DrawingBoard {
         this.undoStack = [this.emptyState];
         this.redoStack = [];
         localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-        localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         
         try {
+            this.isInitializing = true;
             const emptyStateObj = JSON.parse(this.emptyState);
             this.fabricCanvas.loadFromJSON(emptyStateObj, () => {
                 this.fabricCanvas.renderAll();
+                this.isInitializing = false;
             });
         } catch (error) {
             console.error('重置为空状态时出错:', error);
-            // 如果连空状态都无法加载，则直接清空画布
             this.fabricCanvas.clear();
             this.fabricCanvas.setBackgroundColor('#FFFFFF', this.fabricCanvas.renderAll.bind(this.fabricCanvas));
+            this.isInitializing = false;
         }
     }
 
@@ -353,8 +348,8 @@ class DrawingBoard {
 
         // 修改事件监听逻辑
         this.fabricCanvas.on('object:added', (e) => {
-            // 仅在非撤销操作且非临时形状时保存状态
-            if (!this.isUndoing && !this.tempShape) {
+            // 仅在非撤销操作、非临时形状、非初始化加载时保存状态
+            if (!this.isUndoing && !this.tempShape && !this.isInitializing) {
                 this.saveState();
             }
         });
@@ -653,9 +648,9 @@ class DrawingBoard {
                 this.fabricCanvas.renderAll();
                 this.isUndoing = false;
 
-                // 更新 localStorage
+                // 只更新 undoStack 到 localStorage
                 localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+                // 不再保存 redoStack 到 localStorage
             });
         } catch (error) {
             console.error('Undo error:', error);
@@ -677,9 +672,9 @@ class DrawingBoard {
                 this.fabricCanvas.renderAll();
                 this.isUndoing = false;
 
-                // 更新 localStorage
+                // 只更新 undoStack 到 localStorage
                 localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+                // 不再保存 redoStack 到 localStorage
             });
         } catch (error) {
             console.error('Redo error:', error);
@@ -795,6 +790,7 @@ class DrawingBoard {
 
             // 保存新状态
             this.undoStack.push(currentStateStr);
+            // 清空重做栈
             this.redoStack = [];
 
             // 限制撤销栈大小
@@ -802,9 +798,9 @@ class DrawingBoard {
                 this.undoStack.shift();
             }
 
-            // 更新 localStorage
+            // 只保存 undoStack 到 localStorage
             localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+            // 不再保存 redoStack
         } catch (error) {
             console.error('保存状态时出错:', error);
         }
