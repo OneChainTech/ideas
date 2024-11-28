@@ -143,23 +143,30 @@ class DrawingBoard {
         this.currentShapeIcon = null;
         this.isUndoing = false;
         
-        // 初始化 Fabric Canvas
-        this.initializeFabricCanvas();
-        this.setupEventListeners();
-        this.loadState();
-        
+        // 确保 fabric 已经加载
+        if (typeof fabric === 'undefined') {
+            console.error('Fabric.js 未加载');
+            return;
+        }
+
+        // 定义 emptyState，确保使用正确的版本号
         this.emptyState = JSON.stringify({
-            version: "5.3.1",
+            version: fabric.version || "5.3.1",
             objects: [],
             background: "#FFFFFF"
         });
 
-        // 确保初始状态被推送到撤销栈
-        if (this.undoStack.length === 0) {
-            this.undoStack.push(this.emptyState);
-            localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
-            localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
-        }
+        // 清理可能存在的无效状态
+        this.cleanInvalidStates();
+        
+        // 初始化 Fabric Canvas
+        this.initializeFabricCanvas();
+        
+        // 初始化状态
+        this.initializeState();
+        
+        // 设置事件监听
+        this.setupEventListeners();
 
         // 添加插件关闭时的缓存逻辑
         window.addEventListener('beforeunload', () => {
@@ -168,6 +175,151 @@ class DrawingBoard {
         });
 
         const textRecognitionHandler = new TextRecognitionHandler(this.fabricCanvas);
+    }
+
+    // 新增方法：清理无效状态
+    cleanInvalidStates() {
+        try {
+            const undoStack = localStorage.getItem('undoStack');
+            const redoStack = localStorage.getItem('redoStack');
+            
+            if (!undoStack || !this.isValidJsonArray(undoStack)) {
+                localStorage.removeItem('undoStack');
+            }
+            
+            if (!redoStack || !this.isValidJsonArray(redoStack)) {
+                localStorage.removeItem('redoStack');
+            }
+        } catch (error) {
+            console.warn('清理无效状态时出错:', error);
+            localStorage.removeItem('undoStack');
+            localStorage.removeItem('redoStack');
+        }
+    }
+
+    // 新增方法：验证 JSON 数组
+    isValidJsonArray(jsonStr) {
+        try {
+            const parsed = JSON.parse(jsonStr);
+            return Array.isArray(parsed) && parsed.length > 0;
+        } catch {
+            return false;
+        }
+    }
+
+    // 新增方法：验证状态对象
+    isValidStateObject(stateStr) {
+        try {
+            if (typeof stateStr !== 'string') return false;
+            
+            const stateObj = JSON.parse(stateStr);
+            return (
+                stateObj &&
+                typeof stateObj === 'object' &&
+                typeof stateObj.version === 'string' &&
+                Array.isArray(stateObj.objects) &&
+                typeof stateObj.background === 'string'
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    initializeState() {
+        try {
+            const savedUndoStack = localStorage.getItem('undoStack');
+            
+            if (savedUndoStack) {
+                try {
+                    const parsedStack = JSON.parse(savedUndoStack);
+                    
+                    // 验证数组格式
+                    if (!Array.isArray(parsedStack)) {
+                        throw new Error('Undo stack is not an array');
+                    }
+
+                    // 过滤掉无效的状态
+                    const validStates = parsedStack.filter(state => this.isValidStateObject(state));
+
+                    if (validStates.length === 0) {
+                        throw new Error('No valid states found in undo stack');
+                    }
+
+                    this.undoStack = validStates;
+                    this.loadLatestState();
+                } catch (e) {
+                    console.warn('存储的状态无效，重置为初始状态:', e);
+                    this.resetToEmptyState();
+                }
+            } else {
+                this.resetToEmptyState();
+            }
+
+            // 初始化重做栈
+            const savedRedoStack = localStorage.getItem('redoStack');
+            if (savedRedoStack) {
+                try {
+                    const parsedRedoStack = JSON.parse(savedRedoStack);
+                    if (Array.isArray(parsedRedoStack)) {
+                        // 过滤掉无效的状态
+                        this.redoStack = parsedRedoStack.filter(state => this.isValidStateObject(state));
+                    } else {
+                        this.redoStack = [];
+                    }
+                } catch {
+                    this.redoStack = [];
+                }
+            } else {
+                this.redoStack = [];
+            }
+
+            // 确保撤销栈至少包含空状态
+            if (this.undoStack.length === 0) {
+                this.resetToEmptyState();
+            }
+        } catch (error) {
+            console.error('初始化状态时出错:', error);
+            this.resetToEmptyState();
+        }
+    }
+
+    // 新增方法：加载最新状态
+    loadLatestState() {
+        if (this.undoStack.length === 0) {
+            this.resetToEmptyState();
+            return;
+        }
+
+        try {
+            const currentState = this.undoStack[this.undoStack.length - 1];
+            const stateObj = JSON.parse(currentState);
+            
+            this.fabricCanvas.loadFromJSON(stateObj, () => {
+                this.fabricCanvas.renderAll();
+            });
+        } catch (error) {
+            console.error('加载最新状态时出错:', error);
+            this.resetToEmptyState();
+        }
+    }
+
+    resetToEmptyState() {
+        this.undoStack = [this.emptyState];
+        this.redoStack = [];
+        localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+        localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
+        
+        try {
+            const emptyStateObj = JSON.parse(this.emptyState);
+            this.fabricCanvas.loadFromJSON(emptyStateObj, () => {
+                this.fabricCanvas.renderAll();
+            });
+        } catch (error) {
+            console.error('重置为空状态时出错:', error);
+            // 如果连空状态都无法加载，则直接清空画布
+            this.fabricCanvas.clear();
+            this.fabricCanvas.setBackgroundColor('#FFFFFF', this.fabricCanvas.renderAll.bind(this.fabricCanvas));
+        }
     }
 
     initializeFabricCanvas() {
@@ -619,7 +771,19 @@ class DrawingBoard {
 
         try {
             const currentState = this.fabricCanvas.toJSON(['selectable', 'evented']);
+            
+            // 确保状态包含必要的字段
+            if (!currentState.version) {
+                currentState.version = fabric.version || "5.3.1";
+            }
+            
             const currentStateStr = JSON.stringify(currentState);
+
+            // 验证新状态
+            if (!this.isValidStateObject(currentStateStr)) {
+                console.warn('生成的状态无效，忽略此操作');
+                return;
+            }
 
             // 检查是否与最后一个状态相同
             const lastState = this.undoStack[this.undoStack.length - 1];
@@ -629,7 +793,7 @@ class DrawingBoard {
 
             // 保存新状态
             this.undoStack.push(currentStateStr);
-            this.redoStack = []; // 清空重做栈
+            this.redoStack = [];
 
             // 限制撤销栈大小
             if (this.undoStack.length > 50) {
@@ -640,7 +804,7 @@ class DrawingBoard {
             localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
             localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
         } catch (error) {
-            console.error('Error saving state:', error);
+            console.error('保存状态时出错:', error);
         }
     }
 
@@ -649,35 +813,49 @@ class DrawingBoard {
             const savedUndoStack = localStorage.getItem('undoStack');
             const savedRedoStack = localStorage.getItem('redoStack');
 
+            // 验证并加载撤销栈
             if (savedUndoStack) {
-                this.undoStack = JSON.parse(savedUndoStack);
+                const parsedUndoStack = JSON.parse(savedUndoStack);
+                if (Array.isArray(parsedUndoStack) && parsedUndoStack.length > 0) {
+                    this.undoStack = parsedUndoStack;
+                } else {
+                    this.resetToEmptyState();
+                    return;
+                }
             } else {
-                this.undoStack = [this.emptyState];
-                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+                this.resetToEmptyState();
+                return;
             }
 
+            // 验证并加载重做栈
             if (savedRedoStack) {
-                this.redoStack = JSON.parse(savedRedoStack);
+                const parsedRedoStack = JSON.parse(savedRedoStack);
+                this.redoStack = Array.isArray(parsedRedoStack) ? parsedRedoStack : [];
             } else {
                 this.redoStack = [];
-                localStorage.setItem('redoStack', JSON.stringify(this.redoStack));
             }
 
-            const currentState = this.undoStack[this.undoStack.length - 1] || this.emptyState;
-            const stateObj = JSON.parse(currentState);
+            // 加载当前状态
+            const currentState = this.undoStack[this.undoStack.length - 1];
             
-            this.fabricCanvas.loadFromJSON(stateObj, () => {
-                this.fabricCanvas.renderAll();
-            });
+            if (!currentState || currentState === 'undefined') {
+                console.warn('当前状态无效，使用空状态初始化');
+                this.resetToEmptyState();
+                return;
+            }
 
-            // 如果 undoStack 为空，推送初始状态
-            if (this.undoStack.length === 0) {
-                this.undoStack.push(this.emptyState);
-                localStorage.setItem('undoStack', JSON.stringify(this.undoStack));
+            try {
+                const stateObj = JSON.parse(currentState);
+                this.fabricCanvas.loadFromJSON(stateObj, () => {
+                    this.fabricCanvas.renderAll();
+                });
+            } catch (parseError) {
+                console.error('解析当前状态时出错:', parseError);
+                this.resetToEmptyState();
             }
         } catch (error) {
             console.error('加载状态时出错:', error);
-            this.clearCanvas();
+            this.resetToEmptyState();
         }
     }
 
