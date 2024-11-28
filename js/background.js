@@ -90,7 +90,7 @@ async function compressImage(blob) {
         ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
         
         // 提高压缩质量以平衡速度和图片质量
-        const compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.5 });
+        const compressedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.3 });
         return compressedBlob;
     } catch (error) {
         console.error('压缩图片失败:', error);

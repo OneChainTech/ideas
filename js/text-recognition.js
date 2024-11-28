@@ -35,8 +35,8 @@ class TextRecognitionHandler {
         }
     }
 
-    // 添加图片压缩方法
-    async compressImage(dataUrl, maxWidth = 1600) {
+    // 修改压缩图片方法
+    async compressImage(dataUrl, maxWidth = 800) {
         return new Promise((resolve) => {
             const img = new Image();
             img.src = dataUrl;
@@ -57,8 +57,8 @@ class TextRecognitionHandler {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // 压缩为 JPEG 格式，质量 0.8
-                resolve(canvas.toDataURL('image/jpeg', 0.5));
+                // 压缩为 JPEG 格式，质量降低到 0.3
+                resolve(canvas.toDataURL('image/jpeg', 0.3));
             };
         });
     }
@@ -70,9 +70,9 @@ class TextRecognitionHandler {
         const progressContainer = this.showProgressBar();
 
         try {
-            // 获取画布图片并压缩
+            // 获取画布图片并使用更激进的压缩参数
             const originalDataUrl = this.canvas.toDataURL('image/png');
-            const compressedDataUrl = await this.compressImage(originalDataUrl);
+            const compressedDataUrl = await this.compressImage(originalDataUrl, 800);
             const blob = await (await fetch(compressedDataUrl)).blob();
             
             const formData = new FormData();
