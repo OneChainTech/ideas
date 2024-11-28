@@ -142,6 +142,7 @@ class DrawingBoard {
         this.startY = 0;
         this.currentShapeIcon = null;
         this.isUndoing = false;
+        this.isUploading = false;
         
         // 确保 fabric 已经加载
         if (typeof fabric === 'undefined') {
@@ -238,7 +239,7 @@ class DrawingBoard {
                         throw new Error('Undo stack is not an array');
                     }
 
-                    // 过滤掉无效的状态
+                    // 过滤掉无效的态
                     const validStates = parsedStack.filter(state => this.isValidStateObject(state));
 
                     if (validStates.length === 0) {
@@ -767,6 +768,7 @@ class DrawingBoard {
     }
 
     saveState() {
+        if (this.isUploading) return;
         if (this.isUndoing) return;
 
         try {
@@ -948,6 +950,7 @@ class DrawingBoard {
     loadImage(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
+            this.isUploading = true;
             fabric.Image.fromURL(e.target.result, (img) => {
                 const maxWidth = this.fabricCanvas.width * 0.8;
                 const maxHeight = this.fabricCanvas.height * 0.8;
@@ -961,15 +964,17 @@ class DrawingBoard {
                 }
                 
                 img.set({
-                    originX: 'center', // 设置水平中心点
-                    originY: 'center', // 设置垂直中心点
-                    left: this.fabricCanvas.width / 2, // 设置水平位置为画布中心
-                    top: this.fabricCanvas.height / 2, // 设置垂直位置为画布中心
+                    originX: 'center',
+                    originY: 'center',
+                    left: this.fabricCanvas.width / 2,
+                    top: this.fabricCanvas.height / 2,
                 });
                 
                 this.fabricCanvas.add(img);
                 this.fabricCanvas.renderAll();
-                this.saveState();
+                // 忽略上传图片时的撤销保存
+                // this.saveState();
+                this.isUploading = false;
             });
         };
         reader.readAsDataURL(file);
